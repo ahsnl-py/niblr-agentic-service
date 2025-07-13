@@ -1,0 +1,15 @@
+Metadata-Version: 2.4
+Name: niblr-agentic-service
+Version: 0.1.0
+Summary: Agentic Service app using a multi-agent system communicating over A2A and using MCP
+Requires-Python: >=3.13
+Requires-Dist: click>=8.2.0
+Requires-Dist: geopy>=2.4.1
+Requires-Dist: google-adk>=1.0.0
+Requires-Dist: a2a-sdk==0.2.5
+Requires-Dist: fastapi>=0.104.0
+Requires-Dist: uvicorn[standard]>=0.24.0
+Requires-Dist: pydantic>=2.0.0
+Requires-Dist: mcp>=1.5.0
+Requires-Dist: toolbox-core==0.3.0
+Requires-Dist: httpx==0.28.1

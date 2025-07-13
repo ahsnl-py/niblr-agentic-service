@@ -1,0 +1,24 @@
+[project]
+name = "niblr-agentic-service"
+version = "0.1.0"
+description = "Agentic Service app using a multi-agent system communicating over A2A and using MCP"
+requires-python = ">=3.13"
+dependencies = [
+    "click>=8.2.0",
+    "geopy>=2.4.1",
+    "google-adk>=1.0.0",
+    "a2a-sdk==0.2.5",
+    "fastapi>=0.104.0",
+    "uvicorn[standard]>=0.24.0",
+    "pydantic>=2.0.0",
+    "mcp>=1.5.0",
+    "toolbox-core==0.3.0",
+    "httpx==0.28.1",
+]
+
+# Add this section to specify which packages to include
+[tool.setuptools.packages.find]
+include = ["agents*", "host_agent*"]
+
+[tool.uv.sources]
+niblr-agentic-service-a2a = { workspace = true }

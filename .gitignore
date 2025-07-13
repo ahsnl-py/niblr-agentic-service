@@ -1,0 +1,5 @@
+note/
+__pycache__/
+env/
+.env
+.google/
