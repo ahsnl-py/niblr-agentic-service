@@ -42,8 +42,8 @@ def main(host: str = DEFAULT_HOST, port: int = DEFAULT_PORT):
 
     skill = AgentSkill(
         id='property_hunting',
-        name='Search property',
-        description='Helps with finding property in Czech Republic',
+        name='Search and filter property',
+        description='Helps with finding and filtering property in Czech Republic',
         tags=['property'],
         examples=['properties in Praha 2 with price between 20000 and 25000 CZK'],
     )
