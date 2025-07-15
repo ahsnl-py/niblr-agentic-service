@@ -69,7 +69,7 @@ def create_send_message_payload(
 class RoutingAgent:
     """The Routing agent.
 
-    This is the agent responsible for choosing which remote seller agents to send
+    This is the agent responsible for choosing which remote agents to send
     tasks to and coordinate their work.
     """
 
@@ -130,15 +130,18 @@ class RoutingAgent:
 
     def create_agent(self) -> Agent:
         """Create an instance of the RoutingAgent."""
-        model_id = 'gemini-2.5-flash-preview-04-17'
-        print(f'Using hardcoded model: {model_id}')
+        # Change from the preview model to the stable model
+        model_id = 'gemini-2.5-flash'  # ✅ Use stable model
+        # model_id = 'gemini-2.5-flash-preview-04-17'  # ❌ Preview model not available
+        
+        print(f'Using model: {model_id}')
         return Agent(
             model=model_id,
             name='Routing_agent',
             instruction=self.root_instruction,
             before_model_callback=self.before_model_callback,
             description=(
-                'This Routing agent orchestrates the decomposition of the user asking for property in Czech Republic'
+                'Intelligent routing agent that delegates user queries to appropriate specialized agents'
             ),
             tools=[
                 self.send_message,
@@ -149,25 +152,100 @@ class RoutingAgent:
         """Generate the root instruction for the RoutingAgent."""
         current_agent = self.check_active_agent(context)
         return f"""
-        **Role:** You are an expert Routing Delegator. Your primary function is to accurately delegate user inquiries regarding weather or accommodations to the appropriate specialized remote agents.
+        **Role:** You are an intelligent Routing Agent that analyzes user queries and delegates them to the most appropriate specialized remote agents.
 
-        **Core Directives:**
+        **Core Functionality:**
+        - **Query Analysis:** Analyze user requests to understand intent and required capabilities
+        - **Agent Selection:** Choose the most suitable agent based on query content and agent capabilities
+        - **Task Delegation:** Route requests to appropriate agents using the `send_message` function
+        - **Response Coordination:** Present complete responses from remote agents to users
 
-        * **Task Delegation:** Utilize the `send_message` function to assign actionable tasks to remote agents.
-        * **Contextual Awareness for Remote Agents:** If a remote agent repeatedly requests user confirmation, assume it lacks access to the full conversation history. In such cases, enrich the task description with all necessary contextual information relevant to that specific agent.
-        * **Autonomous Agent Engagement:** Never seek user permission before engaging with remote agents. If multiple agents are required to fulfill a request, connect with them directly without requesting user preference or confirmation.
-        * **Transparent Communication:** Always present the complete and detailed response from the remote agent to the user.
-        * **User Confirmation Relay:** If a remote agent asks for confirmation, and the user has not already provided it, relay this confirmation request to the user.
-        * **Focused Information Sharing:** Provide remote agents with only relevant contextual information. Avoid extraneous details.
-        * **No Redundant Confirmations:** Do not ask remote agents for confirmation of information or actions.
-        * **Tool Reliance:** Strictly rely on available tools to address user requests. Do not generate responses based on assumptions. If information is insufficient, request clarification from the user.
-        * **Prioritize Recent Interaction:** Focus primarily on the most recent parts of the conversation when processing requests.
-        * **Active Agent Prioritization:** If an active agent is already engaged, route subsequent related requests to that agent using the appropriate task update tool.
+        **Routing Decision Framework:**
 
-        **Agent Roster:**
+        **1. Property-Related Queries:**
+        - **Keywords:** property, apartment, house, rent, buy, real estate, Prague, Czech Republic, Praha
+        - **Agent:** Property Hunting Agent
+        - **Examples:**
+          - "Find me properties in Praha 2 with price between 20000 and 25000 CZK"
+          - "I need a 2-bedroom apartment in Prague"
+          - "Show me rental properties in Czech Republic"
+          - "What's the real estate market like in Prague?"
 
-        * Available Agents: `{self.agents}`
-        * Currently Active Seller Agent: `{current_agent['active_agent']}`
+        **2. Job-Related Queries:**
+        - **Keywords:** job, career, employment, work, position, vacancy, hiring, CV, resume
+        - **Agent:** Job Hunting Agent
+        - **Examples:**
+          - "Find me software developer jobs in Prague"
+          - "I'm looking for marketing positions"
+          - "Help me with my CV for tech jobs"
+
+        **3. Weather-Related Queries:**
+        - **Keywords:** weather, temperature, forecast, climate, rain, sunny, cold, hot
+        - **Agent:** Weather Agent
+        - **Examples:**
+          - "What's the weather like in Prague today?"
+          - "Will it rain tomorrow?"
+          - "Temperature forecast for this week"
+
+        **4. Currency-Related Queries:**
+        - **Keywords:** currency, exchange rate, convert, currency conversion, currency exchange
+        - **Agent:** Currency Agent
+        - **Examples:**
+          - "What's the exchange rate between USD and EUR?"
+          - "How much is 1000 CZK in USD?"
+          - "Convert 500 EUR to GBP"
+
+        **4. Multi-Agent Scenarios:**
+        - If a query requires multiple agents, delegate to the primary agent first
+        - Let that agent coordinate with others if needed
+        - Example: "I want to move to Prague - help me find a job and apartment"
+
+        **Routing Rules:**
+
+        **Priority 1: Direct Agent Matching**
+        - Match query keywords to agent capabilities
+        - Use exact agent names when available
+
+        **Priority 2: Context-Based Routing**
+        - Consider conversation context and previous interactions
+        - Route follow-up questions to the same agent when appropriate
+
+        **Priority 3: Default Routing**
+        - If no clear match, ask user for clarification
+        - Suggest available agents and their capabilities
+
+        **Agent Communication Guidelines:**
+
+        **Task Description Best Practices:**
+        - Include all relevant context from the user's request
+        - Provide specific details (location, price range, requirements)
+        - Include any constraints or preferences mentioned
+        - Add conversation context if relevant
+
+        **Example Task Descriptions:**
+        - "User is looking for a 2-bedroom apartment in Praha 2 with budget between 20000-25000 CZK. They prefer modern buildings with good transport connections."
+        - "User needs software developer jobs in Prague. They have 3 years of experience in Python and React."
+
+        **Response Handling:**
+        - Present complete responses from remote agents
+        - If an agent asks for clarification, relay that to the user
+        - If an agent provides incomplete information, ask for more details
+        - Maintain conversation flow and context
+
+        **Available Agents:**
+        {self.agents}
+
+        **Currently Active Agent:** {current_agent['active_agent']}
+
+        **Instructions for You:**
+        1. **Always analyze the user's query first** - identify keywords and intent
+        2. **Select the most appropriate agent** based on the routing framework above
+        3. **Use the `send_message` function** with the agent name and a comprehensive task description
+        4. **Include all relevant context** in the task description
+        5. **Present the complete response** from the remote agent to the user
+        6. **If no clear match exists**, ask the user to clarify or suggest available agents
+
+        **Remember:** Your job is to be the intelligent router that connects users to the right specialized agents. Always prioritize user intent and provide seamless delegation.
                 """
 
     def check_active_agent(self, context: ReadonlyContext):
@@ -207,14 +285,13 @@ class RoutingAgent:
     async def send_message(
         self, agent_name: str, task: str, tool_context: ToolContext
     ):
-        """Sends a task to remote seller agent.
+        """Sends a task to a remote agent.
 
         This will send a message to the remote agent named agent_name.
 
         Args:
             agent_name: The name of the agent to send the task to.
-            task: The comprehensive conversation context summary
-                and goal to be achieved regarding user inquiry and purchase request.
+            task: The comprehensive task description including user request and context.
             tool_context: The tool context this method runs in.
 
         Yields:
@@ -275,11 +352,15 @@ class RoutingAgent:
             print('received non-success response. Aborting get task ')
             return None
 
-        if not isinstance(send_response.root.result, Task):
-            print('received non-task response. Aborting get task ')
-            return None
+        response_content = send_response.root.model_dump_json(exclude_none=True)
+        json_content = json.loads(response_content)
 
-        return send_response.root.result
+        resp = []
+        if json_content.get("result", {}).get("parts"):
+            for parts in json_content["result"]["parts"]:
+                if parts.get("text"):
+                    resp.append(parts["text"])
+        return resp
 
 
 def _get_initialized_routing_agent_sync() -> Agent:
@@ -288,8 +369,11 @@ def _get_initialized_routing_agent_sync() -> Agent:
     async def _async_main() -> Agent:
         routing_agent_instance = await RoutingAgent.create(
             remote_agent_addresses=[
-                # os.getenv('AIR_AGENT_URL', 'http://localhost:10002'),
                 os.getenv('PROPERTY_AGENT_URL', 'http://localhost:10001'),
+                # os.getenv('WEATHER_AGENT_URL', 'http://localhost:10002'),
+                # Add more agents as needed:
+                os.getenv('CURRENCY_AGENT_URL', 'http://localhost:10003'),
+                # os.getenv('WEATHER_AGENT_URL', 'http://localhost:10004'),
             ]
         )
         return routing_agent_instance.create_agent()

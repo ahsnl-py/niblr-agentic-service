@@ -4,10 +4,7 @@ Score Sub-Agent for Property Hunting
 This agent is responsible for ranking property listings based on user preferences.
 """
 
-from google.adk.agents import Agent
 import json
-
-MODEL = "gemini-2.5-flash"
 
 DISTRICT_DATA = {
   "districts": {
@@ -137,29 +134,3 @@ def analyze_properties(property_list_json: str) -> str:
     # Return top 3 + explanations
     top_3_properties = ranked_properties[:3]
     return json.dumps(top_3_properties)
-
-SCORE_AGENT_PROMPT = """
-You are a Prague real estate assistant. Your task is:
-    1. Load the provided list of properties from the previous agent.
-    2. Calculate each property's score using the `analyze_properties` function.
-    3. Rank properties from highest to lowest score.
-    4. Show the top 3 best-value properties with details.
-    5. Explain why they scored well (price, size, location).
-
-**Properties from PropertyListingAgent:**
-{property_listings}
-
-Rules:
-    - Always validate input data (e.g., missing price/size).
-    - If no properties exist, return a friendly error.
-    - Format output clearly with emojis for readability.
-    - Use the analyze_properties function to score the properties.
-"""
-
-score_agent = Agent(
-    model=MODEL,
-    name="score_agent",
-    instruction=SCORE_AGENT_PROMPT,
-    output_key="scored_listings",  # This stores the output in state
-    tools=[analyze_properties],
-) 
