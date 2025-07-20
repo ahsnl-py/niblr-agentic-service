@@ -21,7 +21,7 @@ from pprint import pformat
 
 import gradio as gr
 
-from host_agent.routing_agent import root_agent as routing_agent
+from routing_agent import root_agent as routing_agent
 from google.adk.events import Event
 from google.adk.runners import Runner
 from google.adk.sessions import InMemorySessionService

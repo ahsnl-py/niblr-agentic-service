@@ -149,7 +149,7 @@ class CurrencyExecutor(AgentExecutor):
                     logger.info(
                         f"{self.agent.name} final response: '{final_message_text[:200]}{'...' if len(final_message_text) > 200 else ''}'"
                     )
-                    break
+                break
                 else:
                     logger.warning(
                         f"{self.agent.name} received final event but no text in first part: {event.content.parts}"

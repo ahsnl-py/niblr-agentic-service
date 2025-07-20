@@ -1,7 +1,8 @@
+"""Job Hunting Agent Executor for A2A integration."""
+
 import datetime
 import logging
 import uuid
-from collections.abc import AsyncGenerator
 
 from a2a.server.agent_execution import AgentExecutor, RequestContext
 from a2a.server.events import EventQueue
@@ -13,7 +14,6 @@ from a2a.types import (
 )
 from a2a.utils import new_agent_text_message
 from google.adk.agents import Agent
-from google.adk.events import Event
 from google.adk.runners import Runner
 from google.adk.sessions import Session as ADKSession
 from google.genai import types as adk_types
@@ -24,16 +24,17 @@ logger = logging.getLogger(__name__)
 
 
 class JobHuntingAgentExecutor(AgentExecutor):
+    """ADK Agent Executor for Job Hunting A2A integration."""
 
     def __init__(self, agent: Agent, agent_card: AgentCard, runner: Runner):
         """Initialize with an Agent instance and provided ADK Runner.
 
         Args:
-            agent: The Property Hunting agent instance
+            agent: The Job Hunting ADK agent instance
             agent_card: Agent card for A2A service registration
             runner: Pre-configured ADK Runner instance
         """
-        logger.info(f"Initializing Property Hunting Agent Executor for agent: {agent.name}")
+        logger.info(f"Initializing JobHuntingAgentExecutor for agent: {agent.name}")
         self.agent = agent
         self._card = agent_card
         self.runner = runner
@@ -54,19 +55,14 @@ class JobHuntingAgentExecutor(AgentExecutor):
             event_queue: Queue for sending events back to the A2A client
         """
         try:
-            # Step 1: Prepare the input
             user_input = self._prepare_input(context)
-
-            # Step 2: Prepare the session
             user_id, session_id = self._get_session_identifiers(context)
-            await self._ensure_adk_session(user_id, session_id)
 
-            # Step 3: Send the input and loop until a final response is received
+            await self._ensure_adk_session(user_id, session_id)
             final_message_text = await self._run_agent_and_get_response(
                 user_input, user_id, session_id
             )
 
-            # Step 4: Send the response back to the client
             self._send_response(event_queue, context, final_message_text)
 
         except Exception as e:
@@ -77,17 +73,26 @@ class JobHuntingAgentExecutor(AgentExecutor):
         user_input = context.get_user_input()
         if not user_input:
             logger.warning(
-                f"No user input found for {self.agent.name}; using default search."
+                f"No user input found for {self.agent.name}; using default message."
             )
-            user_input = "Search for recent pages"
+            user_input = "Please search for job opportunities"
 
-        logger.info(f"{self.agent.name} processing search query: '{user_input}'")
+        logger.info(
+            f"{self.agent.name} processing job search request: '{user_input}'"
+        )
         return user_input
-    
+
     def _get_session_identifiers(self, context: RequestContext) -> tuple[str, str]:
         """Get user_id and session_id for ADK session management."""
-        user_id = "a2a_user_notion"
-        session_id = context.task_id or str(uuid.uuid4())
+        user_id = "a2a_user_job_hunting"
+        # Use context_id as session_id for conversational memory.
+        # This is the key to maintaining context across multiple turns.
+        # Fall back to task_id only if context_id is not present.
+        session_id = context.context_id or context.task_id or str(uuid.uuid4())
+
+        logger.info(
+            f"Using session_id: {session_id} (from context_id: {context.context_id})"
+        )
         return user_id, session_id
 
     async def _ensure_adk_session(self, user_id: str, session_id: str) -> None:
@@ -96,6 +101,9 @@ class JobHuntingAgentExecutor(AgentExecutor):
             app_name=self.runner.app_name, user_id=user_id, session_id=session_id
         )
         if not adk_session:
+            logger.info(
+                f"No existing session found for {session_id}, creating a new one."
+            )
             await self.session_service.create_session(
                 app_name=self.runner.app_name,
                 user_id=user_id,
@@ -103,6 +111,10 @@ class JobHuntingAgentExecutor(AgentExecutor):
                 state={},
             )
             logger.info(f"Created new ADK session: {session_id} for {self.agent.name}")
+        else:
+            logger.info(
+                f"Retrieved existing ADK session: {session_id} for {self.agent.name}"
+            )
 
     async def _run_agent_and_get_response(
         self, user_input: str, user_id: str, session_id: str
@@ -113,11 +125,11 @@ class JobHuntingAgentExecutor(AgentExecutor):
         )
 
         logger.debug(f"Running ADK agent {self.agent.name} with session {session_id}")
-        events_async: AsyncGenerator[Event, None] = self.runner.run_async(
+        events_async = self.runner.run_async(
             user_id=user_id, session_id=session_id, new_message=request_content
         )
 
-        final_message_text = "(No search results found)"
+        final_message_text = "(No job search result)"
 
         async for event in events_async:
             if (
@@ -146,7 +158,7 @@ class JobHuntingAgentExecutor(AgentExecutor):
         self, event_queue: EventQueue, context: RequestContext, message_text: str
     ) -> None:
         """Send the response back via the event queue."""
-        logger.info(f"Sending Notion search response for task {context.task_id}")
+        logger.info(f"Sending Job Hunting response for task {context.task_id}")
         event_queue.enqueue_event(
             new_agent_text_message(
                 text=message_text,
@@ -160,10 +172,10 @@ class JobHuntingAgentExecutor(AgentExecutor):
     ) -> None:
         """Handle errors and send error response."""
         logger.error(
-            f"Error executing Notion search in {self.agent.name}: {str(error)}",
+            f"Error executing job search in {self.agent.name}: {str(error)}",
             exc_info=True,
         )
-        error_message_text = f"Error searching Notion workspace: {str(error)}"
+        error_message_text = f"Error in job search workflow: {str(error)}"
         event_queue.enqueue_event(
             new_agent_text_message(
                 text=error_message_text,
@@ -182,13 +194,14 @@ class JobHuntingAgentExecutor(AgentExecutor):
         task_id = context.task_id or "unknown_task"
         context_id = context.context_id or "unknown_context"
         logger.info(
-            f"Cancelling Notion search task: {task_id} for agent {self.agent.name}"
+            f"Cancelling Job Hunting task: {task_id} for agent {self.agent.name}"
         )
 
         timestamp = datetime.datetime.now(datetime.timezone.utc).isoformat()
+
         canceled_status = TaskStatus(state=TaskState.canceled, timestamp=timestamp)
         cancel_event = TaskStatusUpdateEvent(
             taskId=task_id, contextId=context_id, status=canceled_status, final=True
         )
         event_queue.enqueue_event(cancel_event)
-        logger.info(f"Sent cancel event for Notion task: {task_id}")
+        logger.info(f"Sent cancel event for Job Hunting task: {task_id}") 

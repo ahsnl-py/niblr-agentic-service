@@ -114,7 +114,7 @@ prompt = """
         - If no properties exist, return a friendly error message
 """
 
-URL = os.getenv("TOOLBOX_URL_PROD", "https://toolbox-cevoq673wa-ey.a.run.app")
+URL = os.getenv("TOOLBOX_URL_DEV", "https://toolbox-cevoq673wa-ey.a.run.app")
 headers = {
     "Authorization": auth_methods.aget_google_id_token
 }

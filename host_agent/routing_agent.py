@@ -19,7 +19,7 @@ from a2a.types import (
     SendMessageSuccessResponse,
     Task,
 )
-from .remote_agent_connection import RemoteAgentConnections, TaskUpdateCallback
+from remote_agent_connection import RemoteAgentConnections, TaskUpdateCallback
 from dotenv import load_dotenv
 from google.adk import Agent
 from google.adk.agents.callback_context import CallbackContext
@@ -370,9 +370,9 @@ def _get_initialized_routing_agent_sync() -> Agent:
         routing_agent_instance = await RoutingAgent.create(
             remote_agent_addresses=[
                 os.getenv('PROPERTY_AGENT_URL', 'http://localhost:10001'),
-                # os.getenv('WEATHER_AGENT_URL', 'http://localhost:10002'),
+                os.getenv('JOB_AGENT_URL', 'http://localhost:10002'),
                 # Add more agents as needed:
-                os.getenv('CURRENCY_AGENT_URL', 'http://localhost:10003'),
+                # os.getenv('CURRENCY_AGENT_URL', 'http://localhost:10003'),
                 # os.getenv('WEATHER_AGENT_URL', 'http://localhost:10004'),
             ]
         )

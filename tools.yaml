@@ -1,12 +1,6 @@
 sources:
 
-  source-bigquery:
-    kind: bigquery
-    project: niblr-agentic-service
-    location: us
-    # Optionally, you can specify credentials if not using default
-
-  source-bigquery-job-listing:
+  source-bigquery-eu:
     kind: bigquery
     project: niblr-agentic-service
     location: europe-west3
@@ -15,7 +9,7 @@ tools:
   
   search-job-listing-by-title:
     kind: bigquery-sql
-    source: source-bigquery-job-listing
+    source: source-bigquery-eu
     description: Search for job listings by title from BigQuery.
     parameters:
       - name: title
@@ -23,40 +17,55 @@ tools:
         description: The title of the job to search for.
     statement: |
       SELECT *
-      FROM `niblr-agentic-service.raw_layer.job_listing`
+      FROM `niblr-agentic-service.interm_layer.job_listing_view` 
       WHERE LOWER(title) LIKE CONCAT('%', @title, '%')
-      LIMIT 100
+      LIMIT 10
+
+  search-job-listing-by-location:
+    kind: bigquery-sql
+    source: source-bigquery-eu
+    description: Search for job listings in a specific location from BigQuery.
+    parameters:
+      - name: location
+        type: string
+        description: The location to search for.
+    statement: |
+      SELECT *
+      FROM `niblr-agentic-service.interm_layer.job_listing_view` 
+      WHERE LOWER(location) LIKE CONCAT('%', @location, '%')
+      LIMIT 10
+
+  search-job-listing-by-company-name:
+    kind: bigquery-sql
+    source: source-bigquery-eu
+    description: Search for job listings by company name from BigQuery.
+    parameters:
+      - name: company_name
+        type: string
+        description: The name of the company to search for.
+    statement: |
+      SELECT *
+      FROM `niblr-agentic-service.interm_layer.job_listing_view` 
+      WHERE LOWER(company_name) LIKE CONCAT('%', @company_name, '%')
+      LIMIT 10
 
   search-property-listing-by-location:
     kind: bigquery-sql
-    source: source-bigquery
+    source: source-bigquery-eu
     description: Search for property listings in a specific location from BigQuery.
     parameters:
       - name: location
         type: string
         description: The location to search for.
     statement: |
-      WITH property_listing AS (
-        SELECT
-          name as location, 
-          REGEXP_EXTRACT(location, r', ([^,]+),') AS apartment_type,
-          REGEXP_EXTRACT(location, r', ([0-9]+ ?m2)') AS size,
-          SAFE_CAST(REGEXP_REPLACE(REGEXP_EXTRACT(price, r'([0-9 ]+)'), r' ', '') AS INT64) AS price_czk,
-          link
-        FROM
-          `niblr-agentic-service.property_listing.property_listing_stg`
-        WHERE
-          TIMESTAMP_TRUNC(_PARTITIONTIME, MONTH) = TIMESTAMP("2025-07-01")
-          AND REGEXP_EXTRACT(price, r'([0-9 ]+)') IS NOT NULL
-      )
       SELECT * 
-      FROM property_listing
+      FROM `niblr-agentic-service.interm_layer.property_listings_view`
       WHERE location LIKE CONCAT('%', @location, '%')
-      LIMIT 100
+      LIMIT 10
 
   search-property-listing-by-price-range:
     kind: bigquery-sql
-    source: source-bigquery
+    source: source-bigquery-eu
     description: Search for property listings within a price range from BigQuery.
     parameters:
       - name: min_price
@@ -66,29 +75,52 @@ tools:
         type: string
         description: Maximum price.
     statement: |
-      WITH property_listing AS (
-        SELECT
-          name as location, 
-          REGEXP_EXTRACT(location, r', ([^,]+),') AS apartment_type,
-          REGEXP_EXTRACT(location, r', ([0-9]+ ?m2)') AS size,
-          SAFE_CAST(REGEXP_REPLACE(REGEXP_EXTRACT(price, r'([0-9 ]+)'), r' ', '') AS INT64) AS price_czk,
-          link
-        FROM
-          `niblr-agentic-service.property_listing.property_listing_stg`
-        WHERE
-          TIMESTAMP_TRUNC(_PARTITIONTIME, MONTH) = TIMESTAMP("2025-07-01")
-          AND REGEXP_EXTRACT(price, r'([0-9 ]+)') IS NOT NULL
-      )
       SELECT * 
-      FROM property_listing
+      FROM `niblr-agentic-service.interm_layer.property_listings_view`
       WHERE price_czk >= CAST(@min_price AS INT64) AND price_czk <= CAST(@max_price AS INT64)
-      LIMIT 100
+      LIMIT 10
+
+  search-property-listing-by-size-range:
+    kind: bigquery-sql
+    source: source-bigquery-eu
+    description: Search for property listings within a size range from BigQuery.
+    parameters:
+      - name: min_size
+        type: string
+        description: Minimum size.
+      - name: max_size
+        type: string
+        description: Maximum size.
+    statement: |
+      SELECT * 
+      FROM `niblr-agentic-service.interm_layer.property_listings_view`  
+      WHERE size >= CAST(@min_size AS INT64) AND size <= CAST(@max_size AS INT64)
+      LIMIT 10
+
+  search-property-listing-by-apartment-type:
+    kind: bigquery-sql
+    source: source-bigquery-eu
+    description: Search for property listings by apartment type from BigQuery.
+    parameters:
+      - name: apartment_type
+        type: string
+        description: The apartment type to search for.
+    statement: |
+      SELECT * 
+      FROM `niblr-agentic-service.interm_layer.property_listings_view`  
+      WHERE property_type LIKE CONCAT('%', @apartment_type, '%')
+      LIMIT 10
+
 
 toolsets:
 
   job-listing-toolset-bigquery:
     - search-job-listing-by-title
+    - search-job-listing-by-location
+    - search-job-listing-by-company-name
 
   property-listing-toolset-bigquery:
     - search-property-listing-by-location
     - search-property-listing-by-price-range
+    - search-property-listing-by-size-range
+    - search-property-listing-by-apartment-type

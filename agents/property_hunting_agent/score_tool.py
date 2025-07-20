@@ -95,8 +95,17 @@ def analyze_properties(property_list_json: str) -> str:
         # Parse price and size
         try:
             price = float(prop.get("price", "0"))
-            size_str = prop.get("size", "0m2").replace("m2", "").strip()
-            size = float(size_str) if size_str else 0
+            
+            # Handle size - could be string like "50m2" or integer like 50
+            size_raw = prop.get("size", "0m2")
+            if isinstance(size_raw, str):
+                size_str = size_raw.replace("m2", "").strip()
+                size = float(size_str) if size_str else 0
+            elif isinstance(size_raw, (int, float)):
+                size = float(size_raw)
+            else:
+                size = 0
+                
             price_per_m2 = price / size if size > 0 else 0
         except (ValueError, ZeroDivisionError):
             price_per_m2 = 0
