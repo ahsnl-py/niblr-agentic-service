@@ -12,8 +12,8 @@ from a2a.types import (
     AgentCard,
     AgentSkill,
 )
-from agents.property_hunting_agent.agent import create_property_hunting_agent
-from agents.property_hunting_agent.agent_executor import PropertyHuntingAgentExecutor
+from agent import create_property_hunting_agent
+from agent_executor import PropertyHuntingAgentExecutor
 from dotenv import load_dotenv
 from google.adk.artifacts import InMemoryArtifactService
 from google.adk.memory.in_memory_memory_service import InMemoryMemoryService
@@ -25,20 +25,20 @@ load_dotenv()
 
 logging.basicConfig()
 
-DEFAULT_HOST = 'localhost'
-DEFAULT_PORT = 10001
+DEFAULT_HOST = '0.0.0.0'
+DEFAULT_PORT = int(os.environ.get("PORT", 10001))
 
 
 def main(host: str = DEFAULT_HOST, port: int = DEFAULT_PORT):
     # Verify an API key is set.
     # Not required if using Vertex AI APIs.
-    if os.getenv('GOOGLE_GENAI_USE_VERTEXAI') != 'TRUE' and not os.getenv(
-        'GOOGLE_API_KEY'
-    ):
-        raise ValueError(
-            'GOOGLE_API_KEY environment variable not set and '
-            'GOOGLE_GENAI_USE_VERTEXAI is not TRUE.'
-        )
+    # if os.getenv('GOOGLE_GENAI_USE_VERTEXAI') != 'TRUE' and not os.getenv(
+    #     'GOOGLE_API_KEY'
+    # ):
+    #     raise ValueError(
+    #         'GOOGLE_API_KEY environment variable not set and '
+    #         'GOOGLE_GENAI_USE_VERTEXAI is not TRUE.'
+    #     )
 
     skill = AgentSkill(
         id='property_hunting',
@@ -48,10 +48,16 @@ def main(host: str = DEFAULT_HOST, port: int = DEFAULT_PORT):
         examples=['properties in Praha 2 with price between 20000 and 25000 CZK'],
     )
 
+    agent_host_url = (
+        os.getenv("HOST_OVERRIDE")
+        if os.getenv("HOST_OVERRIDE")
+        else f"http://{host}:{port}/"
+    )
+
     agent_card = AgentCard(
         name='Property Hunting Agent',
         description='Helps with finding property in Czech Republic',
-        url=f'http://{host}:{port}/',
+        url=agent_host_url,
         version='1.0.0',
         defaultInputModes=['text'],
         defaultOutputModes=['text'],

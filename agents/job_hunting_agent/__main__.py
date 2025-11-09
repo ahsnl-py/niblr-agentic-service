@@ -3,6 +3,11 @@ import os
 
 import click
 import uvicorn
+from dotenv import load_dotenv
+from google.adk.artifacts import InMemoryArtifactService
+from google.adk.memory.in_memory_memory_service import InMemoryMemoryService
+from google.adk.runners import Runner
+from google.adk.sessions import InMemorySessionService
 
 from a2a.server.apps import A2AStarletteApplication
 from a2a.server.request_handlers import DefaultRequestHandler
@@ -12,33 +17,28 @@ from a2a.types import (
     AgentCard,
     AgentSkill,
 )
-from agents.job_hunting_agent.agent import create_job_hunting_agent
-from agents.job_hunting_agent.agent_executor import JobHuntingAgentExecutor
-from dotenv import load_dotenv
-from google.adk.artifacts import InMemoryArtifactService
-from google.adk.memory.in_memory_memory_service import InMemoryMemoryService
-from google.adk.runners import Runner
-from google.adk.sessions import InMemorySessionService
+from agent import create_job_hunting_agent
+from agent_executor import JobHuntingAgentExecutor
 
 
 load_dotenv()
 
 logging.basicConfig()
 
-DEFAULT_HOST = 'localhost'
-DEFAULT_PORT = 10002
+DEFAULT_HOST = '0.0.0.0'
+DEFAULT_PORT = int(os.environ.get("PORT", 10002))
 
 
 def main(host: str = DEFAULT_HOST, port: int = DEFAULT_PORT):
     # Verify an API key is set.
     # Not required if using Vertex AI APIs.
-    if os.getenv('GOOGLE_GENAI_USE_VERTEXAI') != 'TRUE' and not os.getenv(
-        'GOOGLE_API_KEY'
-    ):
-        raise ValueError(
-            'GOOGLE_API_KEY environment variable not set and '
-            'GOOGLE_GENAI_USE_VERTEXAI is not TRUE.'
-        )
+    # if os.getenv('GOOGLE_GENAI_USE_VERTEXAI') != 'TRUE' and not os.getenv(
+    #     'GOOGLE_API_KEY'
+    # ):
+    #     raise ValueError(
+    #         'GOOGLE_API_KEY environment variable not set and '
+    #         'GOOGLE_GENAI_USE_VERTEXAI is not TRUE.'
+    #     )
 
     skill = AgentSkill(
         id='job_hunting',
@@ -48,10 +48,16 @@ def main(host: str = DEFAULT_HOST, port: int = DEFAULT_PORT):
         examples=['software engineer jobs in prague', 'data scientist positions'],
     )
 
+    agent_host_url = (
+        os.getenv("HOST_OVERRIDE")
+        if os.getenv("HOST_OVERRIDE")
+        else f"http://{host}:{port}/"
+    )
+
     agent_card = AgentCard(
         name='Job Hunting Agent',
         description='Helps with finding job opportunities in Czech Republic',
-        url=f'http://{host}:{port}/',
+        url=agent_host_url,
         version='1.0.0',
         defaultInputModes=['text'],
         defaultOutputModes=['text'],

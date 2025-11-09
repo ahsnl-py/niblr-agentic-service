@@ -84,6 +84,21 @@ python test_client.py
 python test_client.py --interactive
 ```
 
+### Deployment to cloud run
+```bash
+gcloud run deploy property-hunting-agent \
+    --source agents/property_hunting_agent \
+    --port=8080 \
+    --allow-unauthenticated \
+    --min 1 \
+    --region <region> \
+    --update-env-vars GOOGLE_CLOUD_LOCATION=<region> \
+    --update-env-vars GOOGLE_CLOUD_PROJECT=<project-id> \
+    --update-env-vars TOOLBOX_AUDIENCE=<toolbox-url> \
+    --update-env-vars TOOLBOX_URL=<toolbox-url>
+    --memory=1Gi
+```
+
 ### API Endpoints
 - `POST /send_message` - Send job search queries
 - `GET /` - Agent information

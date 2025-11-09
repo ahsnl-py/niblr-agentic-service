@@ -11,8 +11,17 @@ from a2a.types import (
     TaskState,
     TaskStatus,
     TaskStatusUpdateEvent,
+    Task, 
+    Part,
+    TextPart,
+    UnsupportedOperationError,
 )
-from a2a.utils import new_agent_text_message
+from a2a.utils import (
+    new_agent_text_message,
+    completed_task,
+    new_artifact
+)
+from a2a.utils.errors import ServerError
 from google.adk.agents import Agent
 from google.adk.runners import Runner
 from google.adk.sessions import Session as ADKSession
@@ -63,10 +72,10 @@ class JobHuntingAgentExecutor(AgentExecutor):
                 user_input, user_id, session_id
             )
 
-            self._send_response(event_queue, context, final_message_text)
+            await self._send_response(event_queue, context, final_message_text)
 
         except Exception as e:
-            self._handle_error(e, event_queue, context)
+            await self._handle_error(e, event_queue, context)
 
     def _prepare_input(self, context: RequestContext) -> str:
         """Prepare and validate user input."""
@@ -154,20 +163,30 @@ class JobHuntingAgentExecutor(AgentExecutor):
 
         return final_message_text
 
-    def _send_response(
+    async def _send_response(
         self, event_queue: EventQueue, context: RequestContext, message_text: str
     ) -> None:
         """Send the response back via the event queue."""
         logger.info(f"Sending Job Hunting response for task {context.task_id}")
-        event_queue.enqueue_event(
-            new_agent_text_message(
-                text=message_text,
-                context_id=context.context_id,
-                task_id=context.task_id,
+        # await event_queue.enqueue_event(
+        #     new_agent_text_message(
+        #         text=message_text,
+        #         context_id=context.context_id,
+        #         task_id=context.task_id,
+        #     )
+        # )
+
+        parts = [Part(root=TextPart(text=str(message_text)))]
+        await event_queue.enqueue_event(
+            completed_task(
+                context.task_id,
+                context.context_id,
+                [new_artifact(parts, f"job_hunting_{context.task_id}")],
+                [context.message],
             )
         )
 
-    def _handle_error(
+    async def _handle_error(
         self, error: Exception, event_queue: EventQueue, context: RequestContext
     ) -> None:
         """Handle errors and send error response."""
@@ -176,7 +195,7 @@ class JobHuntingAgentExecutor(AgentExecutor):
             exc_info=True,
         )
         error_message_text = f"Error in job search workflow: {str(error)}"
-        event_queue.enqueue_event(
+        await event_queue.enqueue_event(
             new_agent_text_message(
                 text=error_message_text,
                 context_id=context.context_id,
@@ -184,24 +203,29 @@ class JobHuntingAgentExecutor(AgentExecutor):
             )
         )
 
-    async def cancel(self, context: RequestContext, event_queue: EventQueue) -> None:
-        """Request the agent to cancel an ongoing task.
+    async def cancel(
+        self, request: RequestContext, event_queue: EventQueue
+    ) -> Task | None:
+        raise ServerError(error=UnsupportedOperationError())
 
-        Args:
-            context: The A2A request context
-            event_queue: Queue for sending cancellation events
-        """
-        task_id = context.task_id or "unknown_task"
-        context_id = context.context_id or "unknown_context"
-        logger.info(
-            f"Cancelling Job Hunting task: {task_id} for agent {self.agent.name}"
-        )
+    # async def cancel(self, context: RequestContext, event_queue: EventQueue) -> None:
+    #     """Request the agent to cancel an ongoing task.
 
-        timestamp = datetime.datetime.now(datetime.timezone.utc).isoformat()
+    #     Args:
+    #         context: The A2A request context
+    #         event_queue: Queue for sending cancellation events
+    #     """
+    #     task_id = context.task_id or "unknown_task"
+    #     context_id = context.context_id or "unknown_context"
+    #     logger.info(
+    #         f"Cancelling Job Hunting task: {task_id} for agent {self.agent.name}"
+    #     )
 
-        canceled_status = TaskStatus(state=TaskState.canceled, timestamp=timestamp)
-        cancel_event = TaskStatusUpdateEvent(
-            taskId=task_id, contextId=context_id, status=canceled_status, final=True
-        )
-        event_queue.enqueue_event(cancel_event)
-        logger.info(f"Sent cancel event for Job Hunting task: {task_id}") 
+    #     timestamp = datetime.datetime.now(datetime.timezone.utc).isoformat()
+
+    #     canceled_status = TaskStatus(state=TaskState.canceled, timestamp=timestamp)
+    #     cancel_event = TaskStatusUpdateEvent(
+    #         taskId=task_id, contextId=context_id, status=canceled_status, final=True
+    #     )
+    #     await event_queue.enqueue_event(cancel_event)
+    #     logger.info(f"Sent cancel event for Job Hunting task: {task_id}") 

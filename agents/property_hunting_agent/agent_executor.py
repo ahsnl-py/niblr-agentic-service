@@ -8,11 +8,13 @@ from a2a.server.agent_execution import AgentExecutor, RequestContext
 from a2a.server.events import EventQueue
 from a2a.types import (
     AgentCard,
+    Part,
     TaskState,
     TaskStatus,
     TaskStatusUpdateEvent,
+    TextPart,
 )
-from a2a.utils import new_agent_text_message
+from a2a.utils import completed_task, new_agent_text_message, new_artifact
 from google.adk.agents import Agent
 from google.adk.runners import Runner
 from google.adk.sessions import Session as ADKSession
@@ -63,10 +65,10 @@ class PropertyHuntingAgentExecutor(AgentExecutor):
                 user_input, user_id, session_id
             )
 
-            self._send_response(event_queue, context, final_message_text)
+            await self._send_response(event_queue, context, final_message_text)
 
         except Exception as e:
-            self._handle_error(e, event_queue, context)
+            await self._handle_error(e, event_queue, context)
 
     def _prepare_input(self, context: RequestContext) -> str:
         """Prepare and validate user input."""
@@ -154,20 +156,30 @@ class PropertyHuntingAgentExecutor(AgentExecutor):
 
         return final_message_text
 
-    def _send_response(
+    async def _send_response(
         self, event_queue: EventQueue, context: RequestContext, message_text: str
     ) -> None:
         """Send the response back via the event queue."""
         logger.info(f"Sending Host orchestration response for task {context.task_id}")
-        event_queue.enqueue_event(
-            new_agent_text_message(
-                text=message_text,
-                context_id=context.context_id,
-                task_id=context.task_id,
+        # await event_queue.enqueue_event(
+        #     new_agent_text_message(
+        #         text=message_text,
+        #         context_id=context.context_id,
+        #         task_id=context.task_id,
+        #     )
+        # )
+
+        parts = [Part(root=TextPart(text=str(message_text)))]
+        await event_queue.enqueue_event(
+            completed_task(
+                context.task_id,
+                context.context_id,
+                [new_artifact(parts, f"property_hunting_{context.task_id}")],
+                [context.message],
             )
         )
 
-    def _handle_error(
+    async def _handle_error(
         self, error: Exception, event_queue: EventQueue, context: RequestContext
     ) -> None:
         """Handle errors and send error response."""
@@ -176,7 +188,7 @@ class PropertyHuntingAgentExecutor(AgentExecutor):
             exc_info=True,
         )
         error_message_text = f"Error in orchestration workflow: {str(error)}"
-        event_queue.enqueue_event(
+        await event_queue.enqueue_event(
             new_agent_text_message(
                 text=error_message_text,
                 context_id=context.context_id,
@@ -203,5 +215,5 @@ class PropertyHuntingAgentExecutor(AgentExecutor):
         cancel_event = TaskStatusUpdateEvent(
             taskId=task_id, contextId=context_id, status=canceled_status, final=True
         )
-        event_queue.enqueue_event(cancel_event)
+        await event_queue.enqueue_event(cancel_event)
         logger.info(f"Sent cancel event for Host task: {task_id}")

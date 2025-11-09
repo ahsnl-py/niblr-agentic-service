@@ -1,80 +1,14 @@
 import os
-import json
-from google.adk.agents import Agent
-from toolbox_core import ToolboxSyncClient, auth_methods
+
 from dotenv import load_dotenv
+from google.adk.agents import Agent
+from google.oauth2 import id_token
+from google.auth.transport.requests import Request
+from toolbox_core import ToolboxSyncClient
 
 load_dotenv()
 
 MODEL = "gemini-2.5-flash"
-
-# Mock job data for development
-MOCK_JOBS = [
-    {
-        "title": "Software Engineer",
-        "company": "TechCorp",
-        "location": "Prague, Czech Republic",
-        "salary": "80000 CZK/month",
-        "link": "https://example.com/job/123",
-        "description": "Full-stack development with Python and React"
-    },
-    {
-        "title": "Data Scientist",
-        "company": "DataAnalytics Inc",
-        "location": "Prague, Czech Republic",
-        "salary": "90000 CZK/month",
-        "link": "https://example.com/job/124",
-        "description": "Machine learning and data analysis"
-    },
-    {
-        "title": "Product Manager",
-        "company": "StartupXYZ",
-        "location": "Prague, Czech Republic",
-        "salary": "75000 CZK/month",
-        "link": "https://example.com/job/125",
-        "description": "Product strategy and roadmap management"
-    },
-    {
-        "title": "DevOps Engineer",
-        "company": "CloudTech",
-        "location": "Prague, Czech Republic",
-        "salary": "85000 CZK/month",
-        "link": "https://example.com/job/126",
-        "description": "Infrastructure and deployment automation"
-    },
-    {
-        "title": "Frontend Developer",
-        "company": "WebSolutions",
-        "location": "Prague, Czech Republic",
-        "salary": "70000 CZK/month",
-        "link": "https://example.com/job/127",
-        "description": "React and Vue.js development"
-    }
-]
-
-def search_jobs_mock(query: str) -> str:
-    """
-    Mock function to search jobs based on query
-    For development purposes when BigQuery is not available
-    """
-    # Simple keyword matching - convert to lowercase for case-insensitive search
-    query_lower = query.lower()
-    filtered_jobs = []
-    
-    for job in MOCK_JOBS:
-        # Check if query matches title, company, location, or description
-        if (query_lower in job["title"].lower() or 
-            query_lower in job["company"].lower() or
-            query_lower in job["location"].lower() or
-            query_lower in job["description"].lower()):
-            filtered_jobs.append(job)
-    
-    # If no matches, return all jobs
-    if not filtered_jobs:
-        filtered_jobs = MOCK_JOBS
-    
-    return json.dumps(filtered_jobs)
-    
 
 prompt = """
     You are a JobHuntingAgent responsible for finding job opportunities in the Czech Republic.
@@ -113,15 +47,31 @@ prompt = """
     - "marketing jobs in czech republic"
 """
 
-URL = os.getenv("TOOLBOX_URL_DEV", "https://toolbox-cevoq673wa-ey.a.run.app")
-headers = {
-    "Authorization": auth_methods.aget_google_id_token
-}
-toolbox = ToolboxSyncClient(url=URL, client_headers=headers)
-tools = toolbox.load_toolset("job-listing-toolset-bigquery")
+URL = os.getenv("TOOLBOX_URL")
+AUDIENCE = os.getenv("TOOLBOX_AUDIENCE", URL)
 
-# For development, you can use mock data instead
-# tools = [search_jobs_mock]
+
+def _build_toolbox_client(url: str) -> ToolboxSyncClient:
+    """
+    Instantiate a Toolbox client using a synchronous Google ID token provider.
+    The synchronous variant avoids the async metadata refresh path that breaks
+    on Cloud Run.
+    """
+
+    if url is None:
+        raise ValueError("TOOLBOX_URL is not set")
+
+    def _auth_token_provider() -> str:
+        request = Request()
+        token = id_token.fetch_id_token(request, AUDIENCE)
+        return f"Bearer {token}"
+
+    headers = {"Authorization": _auth_token_provider}
+    return ToolboxSyncClient(url=url, client_headers=headers)
+
+
+toolbox = _build_toolbox_client(URL)
+tools = toolbox.load_toolset("job-listing-toolset-bigquery")
 
 def create_job_hunting_agent():
     """

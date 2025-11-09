@@ -70,10 +70,10 @@ class CurrencyExecutor(AgentExecutor):
                 user_input, user_id, session_id
             )
 
-            self._send_response(event_queue, context, final_message_text)
+            await self._send_response(event_queue, context, final_message_text)
 
         except Exception as e:
-            self._handle_error(e, event_queue, context)
+            await self._handle_error(e, event_queue, context)
 
     def _prepare_input(self, context: RequestContext) -> str:
         """Prepare and validate user input."""
@@ -149,11 +149,11 @@ class CurrencyExecutor(AgentExecutor):
                     logger.info(
                         f"{self.agent.name} final response: '{final_message_text[:200]}{'...' if len(final_message_text) > 200 else ''}'"
                     )
-                break
                 else:
                     logger.warning(
                         f"{self.agent.name} received final event but no text in first part: {event.content.parts}"
                     )
+                break
             elif event.is_final_response():
                 logger.warning(
                     f"{self.agent.name} received final event without model content: {event}"
@@ -161,12 +161,12 @@ class CurrencyExecutor(AgentExecutor):
 
         return final_message_text
 
-    def _send_response(
+    async def _send_response(
         self, event_queue: EventQueue, context: RequestContext, message_text: str
     ) -> None:
         """Send the response back via the event queue."""
         logger.info(f"Sending Currency response for task {context.task_id}")
-        event_queue.enqueue_event(
+        await event_queue.enqueue_event(
             new_agent_text_message(
                 text=message_text,
                 context_id=context.context_id,
@@ -174,7 +174,7 @@ class CurrencyExecutor(AgentExecutor):
             )
         )
 
-    def _handle_error(
+    async def _handle_error(
         self, error: Exception, event_queue: EventQueue, context: RequestContext
     ) -> None:
         """Handle errors and send error response."""
@@ -183,7 +183,7 @@ class CurrencyExecutor(AgentExecutor):
             exc_info=True,
         )
         error_message_text = f"Error in currency service: {str(error)}"
-        event_queue.enqueue_event(
+        await event_queue.enqueue_event(
             new_agent_text_message(
                 text=error_message_text,
                 context_id=context.context_id,
@@ -210,7 +210,7 @@ class CurrencyExecutor(AgentExecutor):
         cancel_event = TaskStatusUpdateEvent(
             taskId=task_id, contextId=context_id, status=canceled_status, final=True
         )
-        event_queue.enqueue_event(cancel_event)
+        await event_queue.enqueue_event(cancel_event)
         logger.info(f"Sent cancel event for Currency task: {task_id}")
 
 

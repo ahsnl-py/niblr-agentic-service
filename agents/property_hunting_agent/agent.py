@@ -1,75 +1,16 @@
 import os
-import json
-from google.adk.agents import Agent
-from toolbox_core import ToolboxSyncClient, auth_methods
+
 from dotenv import load_dotenv
-from .score_tool import analyze_properties
+from google.adk.agents import Agent
+from google.auth.transport.requests import Request
+from google.oauth2 import id_token
+from toolbox_core import ToolboxSyncClient
+
+from score_tool import analyze_properties
 
 load_dotenv()
 
 MODEL = "gemini-2.5-flash"
-
-# Mock property data for development
-MOCK_PROPERTIES = [
-    {
-        "price": "23400",
-        "location": "Pod kaštany, Praha 6 - Dejvice",
-        "link": "https://example.com/property/123",
-        "property_type": "1+1 Studio",
-        "size": "50m2"
-    },
-    {
-        "price": "18900",
-        "location": "Malešická, Praha 3 - Žižkov",
-        "link": "https://example.com/property/124",
-        "property_type": "1+KK Studio",
-        "size": "40m2"
-    },
-    {
-        "price": "28500",
-        "location": "Vinohradská, Praha 2 - Vinohrady",
-        "link": "https://example.com/property/125",
-        "property_type": "2+1 Apartment",
-        "size": "65m2"
-    },
-    {
-        "price": "32000",
-        "location": "Anděl, Praha 5 - Smíchov",
-        "link": "https://example.com/property/126",
-        "property_type": "2+1 Apartment",
-        "size": "70m2"
-    },
-    {
-        "price": "19500",
-        "location": "Žižkov, Praha 3 - Žižkov",
-        "link": "https://example.com/property/127",
-        "property_type": "1+1 Studio",
-        "size": "35m2"
-    }
-]
-
-def search_properties_mock(query: str) -> str:
-    """
-    Mock function to search properties based on query
-    For development purposes when BigQuery is not available
-    """
-    # Simple keyword matching
-    query_lower = query.lower()
-    filtered_properties = []
-    
-    for prop in MOCK_PROPERTIES:
-        # Check if query matches location, property type, or price range
-        if (query_lower in prop["location"].lower() or 
-            query_lower in prop["property_type"].lower() or
-            query_lower in prop["price"]):
-            filtered_properties.append(prop)
-    
-    # If no matches, return all properties
-    if not filtered_properties:
-        filtered_properties = MOCK_PROPERTIES
-    
-    return json.dumps(filtered_properties)
-    
 
 prompt = """
     You are a PropertyHuntingAgent responsible for finding and scoring properties in Prague.
@@ -114,15 +55,33 @@ prompt = """
         - If no properties exist, return a friendly error message
 """
 
-URL = os.getenv("TOOLBOX_URL_DEV", "https://toolbox-cevoq673wa-ey.a.run.app")
-headers = {
-    "Authorization": auth_methods.aget_google_id_token
-}
-toolbox = ToolboxSyncClient(url=URL, client_headers=headers)
-tools = toolbox.load_toolset("property-listing-toolset-bigquery")
+URL = os.getenv("TOOLBOX_URL")
+AUDIENCE = os.getenv("TOOLBOX_AUDIENCE", URL)
 
-# tools = [search_properties_mock, analyze_properties]
+
+def _build_toolbox_client(url: str) -> ToolboxSyncClient:
+    """
+    Instantiate a Toolbox client using a synchronous Google ID token provider.
+    The synchronous variant avoids the async metadata refresh path that breaks
+    on Cloud Run.
+    """
+
+    if not url:
+        raise ValueError("TOOLBOX_URL is not set")
+
+    def _auth_token_provider() -> str:
+        request = Request()
+        token = id_token.fetch_id_token(request, AUDIENCE)
+        return f"Bearer {token}"
+
+    headers = {"Authorization": _auth_token_provider}
+    return ToolboxSyncClient(url=url, client_headers=headers)
+
+
+toolbox = _build_toolbox_client(URL)
+tools = toolbox.load_toolset("property-listing-toolset-bigquery")
 tools.append(analyze_properties)
+
 
 def create_property_hunting_agent():
     """
@@ -130,9 +89,9 @@ def create_property_hunting_agent():
     """
     return Agent(
         model=MODEL,
-        name="property_listing_agent",
+        name="property_hunting_agent",
         instruction=prompt,
-        description="A agent that can search the property database for properties",
+        description="An agent that can search the property database for property opportunities",
         tools=tools,
         output_key="property_listings",  # This stores the output in state
     )

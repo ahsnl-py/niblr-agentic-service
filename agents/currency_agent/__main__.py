@@ -5,8 +5,8 @@ import click
 from dotenv import load_dotenv
 import uvicorn
 
-from agent import root_agent
-from agent_executor import CurrencyExecutor
+from agents.currency_agent.agent import root_agent
+from agents.currency_agent.agent_executor import CurrencyExecutor
 
 from google.adk.artifacts import InMemoryArtifactService
 from google.adk.memory import InMemoryMemoryService

@@ -1,0 +1,68 @@
+# Exclude development files
+tools.yaml
+note/
+
+# Exclude documentation that isn't needed in containers
+*.md
+
+# Exclude git files
+.git/
+.gitignore
+
+# Exclude IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Exclude logs
+*.log
+logs/
+
+# Exclude temporary files
+*.tmp
+*.temp
+
+# Exclude OS files
+.DS_Store
+Thumbs.db
+
+# Exclude Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Exclude virtual environments
+venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+
+# Exclude testing
+.coverage
+.pytest_cache/
+.tox/
+
+# Exclude mypy
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
