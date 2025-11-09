@@ -104,8 +104,8 @@ gcloud run deploy property-hunting-agent \
     --region <region> \
     --port 8080 \
     --allow-unauthenticated \
-    --update-env-vars TOOLBOX_URL=https://toolbox-cevoq673wa-ey.a.run.app \
-    --update-env-vars TOOLBOX_AUDIENCE=https://toolbox-cevoq673wa-ey.a.run.app \
+    --update-env-vars TOOLBOX_URL=<toolbox-url> \
+    --update-env-vars TOOLBOX_AUDIENCE=<toolbox-url> \
     --memory 1Gi
 ```
 
