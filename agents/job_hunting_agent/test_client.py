@@ -1,220 +1,256 @@
-#!/usr/bin/env python3
-"""
-Test client for Job Hunting Agent
-
-This script tests the Job Hunting Agent by sending requests to the A2A server
-and displaying the responses.
-"""
+"""Test client for Job Hunting Agent A2A functionality."""
 
 import asyncio
-import json
-import logging
-import sys
+import httpx
+import os
+import traceback
+from uuid import uuid4
 from typing import Any, Dict
 
-import httpx
+from dotenv import load_dotenv
 
-# Configure logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+from a2a.client import A2AClient, A2ACardResolver
+from a2a.types import (
+    GetTaskRequest,
+    GetTaskResponse,
+    GetTaskSuccessResponse,
+    MessageSendParams,
+    SendMessageRequest,
+    SendMessageResponse,
+    SendMessageSuccessResponse,
+    TaskQueryParams,
+)
 
-# Configuration
-HOST = "localhost"
-PORT = 10002
-BASE_URL = f"http://{HOST}:{PORT}"
+# Load environment variables from .env
+load_dotenv()
 
-# Test queries for job hunting
-TEST_QUERIES = [
-    "software engineer jobs in prague",
-    "data scientist positions",
-    "remote developer opportunities",
-    "marketing jobs in czech republic",
-    "python developer",
-    "frontend developer",
-    "devops engineer",
-    "product manager",
-]
+AGENT_URL = os.getenv("HOST_AGENT_A2A_URL", "http://localhost:10002")
 
 
-async def send_message_to_agent(query: str) -> Dict[str, Any]:
-    """
-    Send a message to the Job Hunting Agent and return the response.
+def create_send_message_payload(
+    text: str, task_id: str | None = None, context_id: str | None = None
+) -> Dict[str, Any]:
+    """Create A2A send message payload with proper format.
     
     Args:
-        query: The job search query to send
+        text: The message text to send
+        task_id: Optional task ID to associate with the message
+        context_id: Optional context ID for conversation context
         
     Returns:
-        Dictionary containing the response data
+        Dict: Properly formatted A2A message payload
     """
-    url = f"{BASE_URL}/send_message"
-    
-    payload = {
-        "message": {
-            "role": "user",
-            "parts": [{"text": query}]
-        }
+    payload: Dict[str, Any] = {
+        'message': {
+            'role': 'user',
+            'parts': [{'text': text}], 
+            'messageId': uuid4().hex,
+        },
     }
-    
-    logger.info(f"Sending query: {query}")
-    
-    async with httpx.AsyncClient(timeout=60.0) as client:
-        try:
-            response = await client.post(url, json=payload)
-            response.raise_for_status()
-            return response.json()
-        except httpx.HTTPStatusError as e:
-            logger.error(f"HTTP error occurred: {e.response.status_code} - {e.response.text}")
-            return {"error": f"HTTP {e.response.status_code}: {e.response.text}"}
-        except httpx.RequestError as e:
-            logger.error(f"Request error occurred: {e}")
-            return {"error": f"Request error: {e}"}
+    if task_id:
+        payload['message']['taskId'] = task_id
+    if context_id:
+        payload['message']['contextId'] = context_id
+    return payload
 
 
-def extract_response_text(response_data: Dict[str, Any]) -> str:
-    """
-    Extract the response text from the A2A response structure.
+def print_json_response(response: Any, description: str) -> None:
+    """Print JSON response in a readable format.
     
     Args:
-        response_data: The response data from the agent
-        
-    Returns:
-        The extracted response text
+        response: The response object to print
+        description: Description of the response
     """
+    print(f"--- {description} ---")
     try:
-        # Navigate through the response structure
-        if "response" in response_data:
-            response = response_data["response"]
+        if hasattr(response, 'model_dump_json'):
+            response_json = response.model_dump_json(exclude_none=True)
+            print(response_json)
             
-            # Check if it's a SendMessageSuccessResponse
-            if "root" in response:
-                root = response["root"]
-                
-                # Handle different response types
-                if "message" in root:
-                    message = root["message"]
-                    if "parts" in message and message["parts"]:
-                        # Extract text from parts
-                        parts = message["parts"]
-                        text_parts = []
-                        
-                        for part in parts:
-                            if "root" in part:
-                                part_root = part["root"]
-                                if "text" in part_root:
-                                    text_parts.append(part_root["text"])
-                                elif "kind" in part_root and part_root["kind"] == "text":
-                                    text_parts.append(part_root.get("text", ""))
-                            elif "text" in part:
-                                text_parts.append(part["text"])
-                        
-                        if text_parts:
-                            return "\n".join(text_parts)
-                
-                # Fallback: try to extract any text content
-                if "text" in root:
-                    return root["text"]
-        
-        # If we can't extract text, return the full response for debugging
-        return f"Could not extract text from response. Full response: {json.dumps(response_data, indent=2)}"
-        
-    except Exception as e:
-        logger.error(f"Error extracting response text: {e}")
-        return f"Error extracting response: {e}\nFull response: {json.dumps(response_data, indent=2)}"
-
-
-async def test_job_hunting_agent():
-    """
-    Test the Job Hunting Agent with various queries.
-    """
-    logger.info("🧪 Testing Job Hunting Agent")
-    logger.info(f"📍 Agent URL: {BASE_URL}")
-    logger.info("=" * 60)
-    
-    for i, query in enumerate(TEST_QUERIES, 1):
-        logger.info(f"\n🔍 Test {i}: {query}")
-        logger.info("-" * 40)
-        
-        # Send the query to the agent
-        response_data = await send_message_to_agent(query)
-        
-        # Check for errors
-        if "error" in response_data:
-            logger.error(f"❌ Error: {response_data['error']}")
-            continue
-        
-        # Extract and display the response
-        response_text = extract_response_text(response_data)
-        
-        if response_text:
-            logger.info("✅ Response:")
-            print(response_text)
+            # Try to extract and display the actual content for user readability
+            if hasattr(response, 'result') and response.result:
+                if hasattr(response.result, 'parts') and response.result.parts:
+                    print("\n📝 **Extracted Content:**")
+                    for i, part in enumerate(response.result.parts):
+                        if hasattr(part, 'text') and part.text:
+                            print(f"Part {i}: {part.text}")
+                        elif isinstance(part, dict) and part.get('text'):
+                            print(f"Part {i}: {part['text']}")
+                elif isinstance(response.result, dict) and response.result.get('parts'):
+                    print("\n📝 **Extracted Content:**")
+                    for i, part in enumerate(response.result['parts']):
+                        if isinstance(part, dict) and part.get('text'):
+                            print(f"Part {i}: {part['text']}")
+                            
+        elif hasattr(response, 'root') and hasattr(response.root, 'model_dump_json'):
+            print(response.root.model_dump_json(exclude_none=True))
+        elif hasattr(response, 'dict'): 
+            response_dict = response.dict(exclude_none=True)
+            print(response_dict)
+            
+            # Try to extract content from dict response
+            if isinstance(response_dict, dict) and response_dict.get('result'):
+                result = response_dict['result']
+                if isinstance(result, dict) and result.get('parts'):
+                    print("\n📝 **Extracted Content:**")
+                    for i, part in enumerate(result['parts']):
+                        if isinstance(part, dict) and part.get('text'):
+                            print(f"Part {i}: {part['text']}")
         else:
-            logger.warning("⚠️ No response text found")
-            logger.debug(f"Full response data: {json.dumps(response_data, indent=2)}")
-        
-        # Add a small delay between requests
-        await asyncio.sleep(1)
-    
-    logger.info("\n" + "=" * 60)
-    logger.info("🏁 Testing completed!")
+            print(str(response))
+        print()  # Add a newline after the JSON
+    except Exception as e:
+        print(f"Error printing response: {e}")
+        print(str(response))
+        print()
 
 
-async def interactive_mode():
-    """
-    Run the test client in interactive mode.
-    """
-    logger.info("🎯 Interactive Job Hunting Agent Test")
-    logger.info(f"📍 Agent URL: {BASE_URL}")
-    logger.info("💡 Type 'quit' to exit")
-    logger.info("=" * 60)
+async def run_job_hunting_agent_test(client: A2AClient, test_query: str, test_name: str) -> None:
+    """Run a test query against the job hunting agent.
     
-    while True:
-        try:
-            # Get user input
-            query = input("\n🔍 Enter your job search query: ").strip()
-            
-            if query.lower() in ['quit', 'exit', 'q']:
-                logger.info("👋 Goodbye!")
-                break
-            
-            if not query:
-                logger.warning("⚠️ Please enter a query")
-                continue
-            
-            # Send the query to the agent
-            response_data = await send_message_to_agent(query)
-            
-            # Check for errors
-            if "error" in response_data:
-                logger.error(f"❌ Error: {response_data['error']}")
-                continue
-            
-            # Extract and display the response
-            response_text = extract_response_text(response_data)
-            
-            if response_text:
-                logger.info("✅ Response:")
-                print(response_text)
-            else:
-                logger.warning("⚠️ No response text found")
-                logger.debug(f"Full response data: {json.dumps(response_data, indent=2)}")
+    Args:
+        client: The A2A client to use
+        test_query: The test query to send
+        test_name: Name of the test for logging
+    """
+    print(f"\n=== {test_name} ===")
+    print(f"Test Query: {test_query}")
+
+    send_payload = create_send_message_payload(text=test_query)
+    request = SendMessageRequest(id=str(uuid4()), params=MessageSendParams(**send_payload))
+
+    print("\n--- Sending Task ---")
+    send_response: SendMessageResponse = await client.send_message(request)
+    print_json_response(send_response, 'Send Task Response')
+
+    if not isinstance(send_response, SendMessageSuccessResponse) or not send_response.result:
+        print('Received non-success or empty result from send_message. Aborting.')
+        return
+
+    # Extract task ID from agent's reply
+    agent_reply_data = send_response.result
+    extracted_task_id: str | None = None
+
+    # Handle both Pydantic models and dict responses
+    if hasattr(agent_reply_data, 'taskId'):
+        task_id_value = getattr(agent_reply_data, 'taskId', None)
+        if isinstance(task_id_value, str):
+            extracted_task_id = task_id_value
+    
+    if not extracted_task_id and isinstance(agent_reply_data, dict):
+        task_id_value = agent_reply_data.get('taskId')
+        if isinstance(task_id_value, str):
+            extracted_task_id = task_id_value
+
+    if not extracted_task_id:
+        print("Could not extract taskId from the agent's reply. Aborting.")
+        print_json_response(agent_reply_data, "Agent's reply for debugging")
+        return
+
+    task_id: str = extracted_task_id
+    print(f"Task ID (from agent reply): {task_id}")
+    print("\n--- Querying Task Status ---")
+    
+    max_retries = 15  # Longer timeout for orchestration workflows
+    retry_delay = 3   # Longer delay for multi-agent calls
+    task_status = "unknown"
+
+    for attempt in range(max_retries):
+        get_request = GetTaskRequest(id=str(uuid4()), params=TaskQueryParams(id=task_id))
+        get_response: GetTaskResponse = await client.get_task(get_request)
+        print_json_response(get_response, f'Get Task Response (Attempt {attempt + 1})')
+
+        if isinstance(get_response, GetTaskSuccessResponse) and get_response.result:
+            actual_task_result = get_response.result 
+            if actual_task_result.status:
+                task_status = actual_task_result.status.state
+                print(f"Task State: {task_status}")
                 
-        except KeyboardInterrupt:
-            logger.info("\n👋 Goodbye!")
+                if task_status in ["completed", "failed"]:
+                    if task_status == "completed" and actual_task_result.artifacts:
+                        print("\n🎯 **Final Results Summary:**")
+                        for i, artifact_item in enumerate(actual_task_result.artifacts):
+                            if isinstance(artifact_item, dict):
+                                parts_list = artifact_item.get('parts')
+                                if isinstance(parts_list, list):
+                                    for j, part_data in enumerate(parts_list):
+                                        if isinstance(part_data, dict):
+                                            text = part_data.get('text')
+                                            audio_url = part_data.get('audio_url')
+                                            if text:
+                                                print(f"📄 Content: {text}")
+                                            if audio_url:
+                                                print(f"🔊 Audio URL: {audio_url}")
+                                        else:
+                                            print(f"📄 Content: {part_data}")
+                                else:
+                                    print(f"📄 Content: {artifact_item}")
+                            else:
+                                print(f"📄 Content: {artifact_item}")
+                        print("✅ Test complete.")
+                    elif task_status == "failed" and actual_task_result.status.message:
+                        print(f"❌ Task Failed: {actual_task_result.status.message}")
+                    break
+            else:
+                print("GetTaskResponse result did not contain status.")
+        else:
+            print("GetTaskResponse was not successful or did not contain expected result structure.")
+        
+        if attempt < max_retries - 1 and task_status not in ["completed", "failed"]:
+            print(f"Task not final, retrying in {retry_delay}s...")
+            await asyncio.sleep(retry_delay)
+        elif task_status in ["completed", "failed"]:
             break
-        except Exception as e:
-            logger.error(f"❌ Unexpected error: {e}")
+        else:
+            print("Max retries reached, task did not complete.")
+            break
 
 
-def main():
-    """
-    Main function to run the test client.
-    """
-    if len(sys.argv) > 1 and sys.argv[1] == "--interactive":
-        asyncio.run(interactive_mode())
-    else:
-        asyncio.run(test_job_hunting_agent())
+async def run_all_tests(client: A2AClient) -> None:
+    """Run all job hunting agent tests."""
+    # Test queries for job hunting
+    test_queries = [
+        ("software engineer jobs in prague", "Software Engineer Jobs Test")
+    ]
+    
+    for query, test_name in test_queries:
+        await run_job_hunting_agent_test(client, query, test_name)
+        
+        # Add a small delay between tests
+        if query != test_queries[-1][0]:  # Don't delay after last test
+            await asyncio.sleep(2)
+
+
+async def main() -> None:
+    """Main test function."""
+    print(f'Connecting to Job Hunting Agent at {AGENT_URL}...')
+    try:
+        async with httpx.AsyncClient(timeout=90.0) as httpx_client:
+            # Get agent card first
+            card_resolver = A2ACardResolver(
+                base_url=AGENT_URL,
+                httpx_client=httpx_client
+            )
+            agent_card = await card_resolver.get_agent_card()
+            
+            # Create client with agent card
+            client = A2AClient(
+                httpx_client=httpx_client,
+                agent_card=agent_card,
+                url=AGENT_URL
+            )
+            
+            print('Connection successful.')
+            await run_all_tests(client)
+
+    except httpx.ConnectError as e:
+        print(f'\n❌ Connection error: Could not connect to agent at {AGENT_URL}. Ensure the server is running.')
+        print(f'Details: {e}')
+        traceback.print_exc()
+    except Exception as e:
+        print(f'\n❌ An unexpected error occurred: {e}')
+        traceback.print_exc()
 
 
 if __name__ == "__main__":
-    main() 
+    asyncio.run(main())

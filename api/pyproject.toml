@@ -1,0 +1,27 @@
+[project]
+name = "niblr-agentic-api"
+version = "1.0.0"
+description = "REST API for the Niblr Agentic Concierge chatbot"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi>=0.115.12",
+    "uvicorn[standard]>=0.34.3",
+    "pydantic>=2.10.6",
+    "python-dotenv>=1.1.0",
+    "google-adk>=1.15.1",
+    "sqlalchemy>=2.0.36",
+    "python-jose[cryptography]>=3.3.0",
+    "bcrypt>=4.0.1",
+    "python-multipart>=0.0.12",
+]
+
+[project.scripts]
+api = "api.__main__:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["api"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+

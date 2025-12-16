@@ -99,13 +99,20 @@ python test_client.py --interactive
 ## Deployment to Cloud Run
 
 ```bash
+export REGION=<region>
+export PROJECT_ID=<project_id>
+export TOOLBOX_URL=<toolbox_url>
+
 gcloud run deploy property-hunting-agent \
     --source agents/property_hunting_agent \
-    --region <region> \
+    --region $REGION \
     --port 8080 \
     --allow-unauthenticated \
-    --update-env-vars TOOLBOX_URL=<toolbox-url> \
-    --update-env-vars TOOLBOX_AUDIENCE=<toolbox-url> \
+    --update-env-vars GOOGLE_CLOUD_LOCATION=$REGION \
+    --update-env-vars GOOGLE_CLOUD_PROJECT=$PROJECT_ID \
+    --update-env-vars TOOLBOX_AUDIENCE=$TOOLBOX_URL \
+    --update-env-vars TOOLBOX_URL=$TOOLBOX_URL \
+    --update-env-vars GOOGLE_API_KEY=$API_KEY \
     --memory 1Gi
 ```
 

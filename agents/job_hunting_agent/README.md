@@ -84,18 +84,50 @@ python test_client.py
 python test_client.py --interactive
 ```
 
-### Deployment to cloud run
+### Deployment to Cloud Run
+
+#### Option 1: Using Deployment Script (Recommended)
+
+The easiest way to deploy is using the provided deployment script that reads from `.env`:
+
 ```bash
-gcloud run deploy property-hunting-agent \
-    --source agents/property_hunting_agent \
+cd agents/job_hunting_agent
+./deploy.sh
+```
+
+Make sure your `.env` file contains the required variables:
+- `GOOGLE_CLOUD_PROJECT` - Your GCP project ID
+- `GOOGLE_CLOUD_LOCATION` - Region (e.g., `europe-west3`)
+- `TOOLBOX_URL` - URL of your Toolbox service
+- `GOOGLE_API_KEY` - (Optional) Google AI API key, or use Vertex AI
+- `HOST_OVERRIDE` - (Optional) Override host URL
+- `TOOLBOX_AUDIENCE` - (Optional) Defaults to `TOOLBOX_URL` if not set
+- `MEMORY` - (Optional) Memory allocation, defaults to `1Gi`
+- `MIN_INSTANCES` - (Optional) Minimum instances, defaults to `1`
+
+#### Option 2: Manual Deployment
+
+If you prefer to deploy manually:
+
+```bash
+export REGION=<region>
+export PROJECT_ID=<project_id>
+export TOOLBOX_URL=<toolbox_url>
+export GOOGLE_API_KEY=<api_key>
+export HOST_OVERRIDE=<url-server>
+
+gcloud run deploy job-hunting-agent \
+    --source agents/job_hunting_agent \
     --port=8080 \
     --allow-unauthenticated \
     --min 1 \
-    --region <region> \
-    --update-env-vars GOOGLE_CLOUD_LOCATION=<region> \
-    --update-env-vars GOOGLE_CLOUD_PROJECT=<project-id> \
-    --update-env-vars TOOLBOX_AUDIENCE=<toolbox-url> \
-    --update-env-vars TOOLBOX_URL=<toolbox-url>
+    --region $REGION \
+    --update-env-vars GOOGLE_CLOUD_LOCATION=$REGION \
+    --update-env-vars GOOGLE_CLOUD_PROJECT=$PROJECT_ID \
+    --update-env-vars TOOLBOX_AUDIENCE=$TOOLBOX_URL \
+    --update-env-vars TOOLBOX_URL=$TOOLBOX_URL \
+    --update-env-vars GOOGLE_API_KEY=$GOOGLE_API_KEY \
+    --update-env-vars HOST_OVERRIDE=$HOST_OVERRIDE \
     --memory=1Gi
 ```
 

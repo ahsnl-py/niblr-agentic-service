@@ -133,6 +133,9 @@ class RoutingAgent:
         - "User needs software developer jobs in Prague. They have 3 years of experience in Python and React."
 
         **Response Handling:**
+        - **Extract artifacts from Task objects**: When a remote agent returns a Task object, extract the artifacts from it (especially the text content from artifacts[].parts[].text)
+        - **Present structured data**: If the artifacts contain JSON data (like property listings or job listings), present it as structured JSON, not markdown
+        - **Preserve JSON format**: If the remote agent returns JSON data, preserve and present it as JSON, not convert it to markdown
         - Present complete responses from remote agents
         - If an agent asks for clarification, relay that to the user
         - If an agent provides incomplete information, ask for more details
@@ -148,8 +151,13 @@ class RoutingAgent:
         2. **Select the most appropriate agent** based on the routing framework above
         3. **Use the `send_message` function** with the agent name and a comprehensive task description
         4. **Include all relevant context** in the task description
-        5. **Present the complete response** from the remote agent to the user
-        6. **If no clear match exists**, ask the user to clarify or suggest available agents
+        5. **Extract and present artifacts**: When the remote agent returns a Task object:
+           - Extract artifacts from the Task object (task.artifacts[])
+           - Extract text content from artifacts[].parts[] where kind="text"
+           - If the text contains JSON (like property listings or job listings), present it as JSON, not markdown
+           - Preserve the original JSON structure from the remote agent
+        6. **Present the complete response** from the remote agent to the user in its original format
+        7. **If no clear match exists**, ask the user to clarify or suggest available agents
 
         **Remember:** Your job is to be the intelligent router that connects users to the right specialized agents. Always prioritize user intent and provide seamless delegation.
         """

@@ -9,7 +9,7 @@ from typing import Any, Dict
 
 from dotenv import load_dotenv
 
-from a2a.client import A2AClient
+from a2a.client import A2AClient, A2ACardResolver
 from a2a.types import (
     GetTaskRequest,
     GetTaskResponse,
@@ -211,7 +211,7 @@ async def run_all_tests(client: A2AClient) -> None:
     # Test 1: Simple Notion query about sermon notes
     await run_host_agent_test(
         client,
-        "Get me properties in Praha 2 with price between 20000 and 25000 CZK",
+        "Get me properties in Praha 2",
         "Notion Agent Test (Sermon Notes Search)"
     )
     
@@ -242,9 +242,20 @@ async def main() -> None:
     print(f'Connecting to Host Agent at {AGENT_URL}...')
     try:
         async with httpx.AsyncClient(timeout=90.0) as httpx_client:  # Longer timeout for orchestration
-            client = await A2AClient.get_client_from_agent_card_url(
-                httpx_client, AGENT_URL
+            # First, get the agent card using A2ACardResolver
+            card_resolver = A2ACardResolver(
+                base_url=AGENT_URL,
+                httpx_client=httpx_client
             )
+            agent_card = await card_resolver.get_agent_card()
+            
+            # Then create the A2AClient with the agent card
+            client = A2AClient(
+                httpx_client=httpx_client,
+                agent_card=agent_card,
+                url=AGENT_URL
+            )
+            
             print('Connection successful.')
             await run_all_tests(client)
 
