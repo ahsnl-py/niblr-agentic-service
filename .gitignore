@@ -112,3 +112,6 @@ cython_debug/
 
 credentials.json
 toolbox-key.json
+
+*.db
+*.tables
