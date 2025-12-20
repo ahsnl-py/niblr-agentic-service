@@ -12,6 +12,17 @@ services:
       - GOOGLE_CLOUD_LOCATION=${GOOGLE_CLOUD_LOCATION}
       - AGENT_ENGINE_RESOURCE_NAME=${AGENT_ENGINE_RESOURCE_NAME}
       - API_PORT=8083
+      - GOOGLE_GENAI_USE_VERTEXAI=TRUE
+      - STAGING_BUCKET=${STAGING_BUCKET}
+      - JOB_HUNTING_AGENT_URL=${JOB_HUNTING_AGENT_URL}
+      - PROPERTY_HUNTING_AGENT_URL=${PROPERTY_HUNTING_AGENT_URL}
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY}
+      - CORS_ORIGINS=${CORS_ORIGINS}
+      - GOOGLE_APPLICATION_CREDENTIALS=/app/creds/adc.json
+      - DATABASE_URL=sqlite:////app/data/niblr_api.db  # Explicit database path for Docker
+    volumes:
+      - ~/.config/gcloud/application_default_credentials.json:/app/creds/adc.json:ro
+      - ./data:/app/data  # Persist SQLite database and other data files
     env_file:
       - ../.env
     restart: unless-stopped

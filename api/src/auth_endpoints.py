@@ -8,7 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 from .database import get_db
-from .db_models import User
+from .db_models import User, Subscription, SubscriptionType
 from .models import UserRegister, Token, UserResponse
 from .auth import (
     authenticate_user,
@@ -47,6 +47,16 @@ async def register(user_data: UserRegister, db: Session = Depends(get_db)):
     )
     
     db.add(db_user)
+    db.flush()  # Get user.id without committing
+    
+    # Create default subscription with 10 free credits
+    subscription = Subscription(
+        user_id=db_user.id,
+        credits=10,
+        subscription_type=SubscriptionType.FREE,
+        has_unlimited_credits=False
+    )
+    db.add(subscription)
     db.commit()
     db.refresh(db_user)
     

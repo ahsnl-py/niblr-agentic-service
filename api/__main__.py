@@ -18,6 +18,8 @@ try:
     from .src.auth_endpoints import router as auth_router
     from .src.session_endpoints import router as session_router
     from .src.database import init_db
+    # Import models so they're registered with Base.metadata before init_db() is called
+    from .src import db_models  # noqa: F401
 except ImportError:
     # Fall back to absolute import (when run directly: uv run .)
     # Add parent directory to path if not already there
@@ -29,6 +31,8 @@ except ImportError:
     from src.auth_endpoints import router as auth_router
     from src.session_endpoints import router as session_router
     from src.database import init_db
+    # Import models so they're registered with Base.metadata before init_db() is called
+    from src import db_models  # noqa: F401
 
 # Initialize FastAPI app
 app = FastAPI(
@@ -53,7 +57,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Initialize database
+# Initialize database (models must be imported before this)
 init_db()
 
 # Register all endpoints
@@ -64,7 +68,8 @@ app.include_router(session_router)
 
 def main():
     """Main entry point for the API server."""
-    port = int(os.getenv("API_PORT", 8083))
+    # Cloud Run sets PORT env var, fallback to API_PORT or 8083
+    port = int(os.getenv("PORT", os.getenv("API_PORT", 8083)))
     uvicorn.run(
         app,
         host="0.0.0.0",

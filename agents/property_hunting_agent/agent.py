@@ -18,7 +18,6 @@ MODEL = "gemini-2.5-flash"
 # Pydantic schema for structured property listing output
 class PropertyListing(BaseModel):
     """Individual property listing structure"""
-    property_id: Optional[str] = Field(default=None, description="Unique identifier for the property")
     title: Optional[str] = Field(default=None, description="Property title or headline")
     location: Optional[str] = Field(default=None, description="Property location/address")
     price: Optional[str] = Field(default=None, description="Monthly rent price")
@@ -70,7 +69,6 @@ prompt = """
     {
         "properties": [
             {
-                "property_id": "...",
                 "title": "...",
                 "location": "...",
                 "price": "...",

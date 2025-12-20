@@ -44,10 +44,13 @@ prompt = """
     Your task is to follow these steps:
 
     STEP 1: Get Job Listings Using Vector Search
-    - Use the job-listing-toolset-bigquery toolbox to perform semantic vector search based on the user's query
+    - Use the search-job-by-vector-search tool from the job-listing-toolset-bigquery toolbox to perform semantic vector search
+    - The tool requires two parameters:
+      * user_query: The user's search query (pass it as-is, no need to modify or lowercase it)
+      * top_k: The number of jobs to return (default to 5 if not specified by the user)
     - The vector search will find the most semantically relevant jobs based on meaning, not just keyword matching
-    - Pass the user's query directly to the toolbox - no need to modify or lowercase it
-    - This will return up to 5 most relevant job opportunities based on semantic similarity
+    - If the user doesn't specify how many jobs they want, use top_k=5 as the default
+    - This will return the most relevant job opportunities based on semantic similarity
 
     STEP 2: Process and Structure Results
     - The toolbox returns structured job data with the following fields:
@@ -67,7 +70,7 @@ prompt = """
     
     STEP 3: Format the Output
     - Return your results as a JSON object matching the specified schema
-    - Include ALL jobs returned (up to 5) in the "jobs" array
+    - Include ALL jobs returned in the "jobs" array
     - Set "total_count" to the number of jobs found
     - Include all available fields for each job listing
     - If no jobs exist, return an empty "jobs" array with total_count=0 and a helpful message
@@ -97,8 +100,11 @@ prompt = """
     }
 
     Rules:
-        - Use the job-listing-toolset-bigquery toolbox function for step 1
+        - Use the search-job-by-vector-search tool from job-listing-toolset-bigquery toolbox for step 1
+        - Always provide both parameters: user_query (the user's search query) and top_k (number of results, default to 5)
         - Pass the user's query as-is - vector search handles semantic matching automatically
+        - If the user asks for a specific number of jobs (e.g., "find me 3 jobs"), use that number for top_k
+        - If the user doesn't specify a number, use top_k=5 as the default
         - Always return results in the specified JSON format
         - Include all available information from the toolbox response
         - If no jobs exist, return empty array with total_count=0 and a helpful message
@@ -107,17 +113,19 @@ prompt = """
 
     Example workflow:
     1. Receive user query (e.g., "software engineer jobs in prague")
-    2. Call job-listing-toolset-bigquery toolbox with the user's query
-    3. Receive up to 5 structured job results
+    2. Call search-job-by-vector-search tool with:
+       - user_query: "software engineer jobs in prague"
+       - top_k: 5 (default, unless user specifies otherwise)
+    3. Receive structured job results
     4. Format results as JSON matching the specified schema
     5. Return the structured JSON response
 
     Example queries you can handle:
-    - "software engineer jobs in prague"
-    - "data scientist positions"
-    - "remote developer opportunities"
-    - "marketing jobs in czech republic"
-    - "python developer with machine learning experience"
+    - "software engineer jobs in prague" → use top_k=5 (default)
+    - "find me 3 data scientist positions" → use top_k=3
+    - "remote developer opportunities" → use top_k=5 (default)
+    - "marketing jobs in czech republic" → use top_k=5 (default)
+    - "python developer with machine learning experience" → use top_k=5 (default)
 """
 
 URL = os.getenv("TOOLBOX_URL")

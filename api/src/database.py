@@ -13,10 +13,12 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # Database URL - defaults to SQLite, can be overridden with DATABASE_URL env var
-# For PostgreSQL: DATABASE_URL=postgresql://user:password@localhost/dbname
+# For PostgreSQL: DATABASE_URL=postgresql://user:password@host:port/dbname
+# For Cloud SQL via Cloud SQL Proxy: DATABASE_URL=postgresql://user:password@localhost:5432/dbname
+# For Cloud SQL direct (Cloud Run): DATABASE_URL=postgresql://user:password@/dbname?host=/cloudsql/PROJECT:REGION:INSTANCE
 DATABASE_URL = os.getenv(
     "DATABASE_URL",
-    "sqlite:///./niblr_api.db"  # SQLite database file in current directory
+    "sqlite:///./niblr_api.db"  # SQLite database file in current directory (fallback for local dev)
 )
 
 # Create engine

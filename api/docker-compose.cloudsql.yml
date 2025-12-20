@@ -1,0 +1,53 @@
+version: '3.8'
+
+services:
+  cloudsql-proxy:
+    image: gcr.io/cloud-sql-connectors/cloud-sql-proxy:2.8.0
+    command:
+      - "--address=0.0.0.0"
+      - "--port=5432"
+      - "${GOOGLE_CLOUD_PROJECT}:${GOOGLE_CLOUD_LOCATION}:niblr-db"
+    volumes:
+      - ~/.config/gcloud/application_default_credentials.json:/credentials.json:ro
+    environment:
+      - GOOGLE_APPLICATION_CREDENTIALS=/credentials.json
+    ports:
+      - "5432:5432"
+    restart: unless-stopped
+
+  api:
+    build:
+      context: ..
+      dockerfile: api/Dockerfile
+    ports:
+      - "8083:8080"  # Map host port 8083 to container port 8080
+    environment:
+      - GOOGLE_CLOUD_PROJECT=${GOOGLE_CLOUD_PROJECT}
+      - GOOGLE_CLOUD_LOCATION=${GOOGLE_CLOUD_LOCATION}
+      - AGENT_ENGINE_RESOURCE_NAME=${AGENT_ENGINE_RESOURCE_NAME}
+      - PORT=8080  # Container listens on 8080 (Cloud Run standard)
+      - API_PORT=8080
+      - GOOGLE_GENAI_USE_VERTEXAI=TRUE
+      - STAGING_BUCKET=${STAGING_BUCKET}
+      - JOB_HUNTING_AGENT_URL=${JOB_HUNTING_AGENT_URL}
+      - PROPERTY_HUNTING_AGENT_URL=${PROPERTY_HUNTING_AGENT_URL}
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY}
+      - CORS_ORIGINS=${CORS_ORIGINS}
+      - GOOGLE_APPLICATION_CREDENTIALS=/app/creds/adc.json
+      # Connect to Cloud SQL via Cloud SQL Proxy
+      # Format: postgresql://username:password@cloudsql-proxy:5432/database_name
+      - DATABASE_URL=postgresql://${DB_USER:-postgres}:${DB_PASSWORD}@cloudsql-proxy:5432/niblr_api
+    volumes:
+      - ~/.config/gcloud/application_default_credentials.json:/app/creds/adc.json:ro
+    env_file:
+      - ../.env
+    depends_on:
+      - cloudsql-proxy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+

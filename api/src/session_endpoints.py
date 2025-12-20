@@ -15,7 +15,7 @@ from .models import (
     ChatResponse,
 )
 from .auth import get_current_user
-from .config import REMOTE_APP
+from .config import REMOTE_APP, AGENT_ENGINE_RESOURCE_NAME, PROJECT_ID, LOCATION
 from .utils import extract_json_from_text, extract_text_from_artifacts
 
 router = APIRouter(prefix="/api/sessions", tags=["sessions"])
@@ -173,7 +173,10 @@ async def delete_session(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Delete a session.
+    """Delete a session from both Vertex AI and the database.
+    
+    Uses the Vertex AI Agent Engine Sessions API as documented:
+    https://docs.cloud.google.com/agent-builder/agent-engine/sessions/manage-sessions-api#delete_a_session
     
     Args:
         session_id: Vertex AI session ID
@@ -186,6 +189,15 @@ async def delete_session(
             detail="Session not found"
         )
     
+    agent_session_id = db_session.agent_session_id
+    try:
+        session_name = f"{AGENT_ENGINE_RESOURCE_NAME}/sessions/{agent_session_id}"
+        REMOTE_APP.delete_session(name=session_name)
+    except Exception:
+        # Silently fail - Vertex AI session deletion failure shouldn't prevent database cleanup
+        pass
+    
+    # Delete from database (always attempt, even if Vertex AI deletion failed)
     db.delete(db_session)
     db.commit()
     

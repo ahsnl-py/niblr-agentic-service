@@ -20,28 +20,40 @@ COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
 # Install system dependencies
 RUN apt-get update && apt-get install -y \
     curl \
+    sqlite3 \
     && rm -rf /var/lib/apt/lists/*
 
-# Set working directory
+# Set working directory to /app (parent of api package)
 WORKDIR /app
 
 # Copy API package files
-COPY api/ /app/api/
-COPY api/pyproject.toml /app/pyproject.toml
-COPY api/uv.lock /app/uv.lock
-COPY api/README.md /app/README.md
+COPY api/pyproject.toml /app/api/pyproject.toml
+COPY api/uv.lock /app/api/uv.lock
+COPY api/README.md /app/api/README.md
+COPY api/__init__.py /app/api/__init__.py
+COPY api/__main__.py /app/api/__main__.py
+COPY api/src /app/api/src
 
-# Install dependencies using uv
-WORKDIR /app
+# Install dependencies using uv (respect pyproject/uv.lock)
+# Run from api directory so uv can find pyproject.toml and create venv there
+WORKDIR /app/api
 RUN uv sync --frozen --no-dev
 
-# Expose port
-EXPOSE 8083
+# Set working directory back to /app so Python can import 'api' as a package
+WORKDIR /app
+
+# Expose port (Cloud Run uses PORT env var, but 8080 is standard)
+EXPOSE 8080
 
 # Environment variables
 ENV PYTHONUNBUFFERED=1
-ENV API_PORT=8083
+ENV PORT=8080
+ENV API_PORT=8080
 
-# Run the API
-ENTRYPOINT ["uv", "run", "api"]
+# Run the API using the venv's Python directly
+# This ensures:
+# 1. We use the venv created by uv sync in /app/api/.venv
+# 2. Python can import 'api' as a package from /app/api/
+# 3. All dependencies are available from the venv
+ENTRYPOINT ["/app/api/.venv/bin/python", "-m", "api"]
 
