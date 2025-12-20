@@ -192,7 +192,8 @@ async def delete_session(
     agent_session_id = db_session.agent_session_id
     try:
         session_name = f"{AGENT_ENGINE_RESOURCE_NAME}/sessions/{agent_session_id}"
-        REMOTE_APP.delete_session(name=session_name)
+        REMOTE_APP.sessions.delete(name=session_name)
+        
     except Exception:
         # Silently fail - Vertex AI session deletion failure shouldn't prevent database cleanup
         pass
