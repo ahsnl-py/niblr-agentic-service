@@ -16,6 +16,7 @@ MODEL = "gemini-2.5-flash"
 # Pydantic schema for structured job listing output
 class JobListing(BaseModel):
     """Individual job listing structure"""
+    job_id: Optional[str] = Field(default=None, description="Unique identifier for the job")
     job_title: str = Field(description="The position title")
     location: str = Field(description="Job location (typically Prague, Czech Republic)")
     company_name: str = Field(description="Name of the hiring company")
@@ -80,6 +81,7 @@ prompt = """
     {
         "jobs": [
             {
+                "job_id": "...",
                 "job_title": "...",
                 "location": "...",
                 "company_name": "...",

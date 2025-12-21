@@ -1,6 +1,6 @@
 """SQLAlchemy database models for User and Session."""
 
-from sqlalchemy import Column, Integer, String, DateTime, Text, ForeignKey, Boolean, Enum as SQLEnum
+from sqlalchemy import Column, Integer, BigInteger, String, DateTime, Text, ForeignKey, Boolean, Enum as SQLEnum
 from sqlalchemy.orm import relationship
 from datetime import datetime
 import enum
@@ -109,4 +109,22 @@ class PaymentMethod(Base):
     
     # Relationship to user
     user = relationship("User", back_populates="payment_methods")
+
+
+class CatalogItem(Base):
+    """Catalog item model for storing saved items from agent responses."""
+    __tablename__ = "catalog_items"
+
+    id = Column(BigInteger, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    catalog_item_id = Column(String(50), nullable=False)  # property_id or job_id from agent response
+    catalog_name = Column(String(50), nullable=False)  # 'property', 'job', etc.
+    saved_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    agent_name = Column(String(255), nullable=True)
+    source_message_id = Column(Text, nullable=True)
+    session_id = Column(BigInteger, nullable=True)
+    
+    # Relationship to user
+    user = relationship("User", backref="catalog_items")
 

@@ -17,6 +17,7 @@ try:
     from .src.endpoints import register_endpoints
     from .src.auth_endpoints import router as auth_router
     from .src.session_endpoints import router as session_router
+    from .src.catalog_endpoints import router as catalog_router
     from .src.database import init_db
     # Import models so they're registered with Base.metadata before init_db() is called
     from .src import db_models  # noqa: F401
@@ -30,6 +31,7 @@ except ImportError:
     from src.endpoints import register_endpoints
     from src.auth_endpoints import router as auth_router
     from src.session_endpoints import router as session_router
+    from src.catalog_endpoints import router as catalog_router
     from src.database import init_db
     # Import models so they're registered with Base.metadata before init_db() is called
     from src import db_models  # noqa: F401
@@ -64,6 +66,7 @@ init_db()
 register_endpoints(app)
 app.include_router(auth_router)
 app.include_router(session_router)
+app.include_router(catalog_router)
 
 
 def main():

@@ -101,3 +101,35 @@ class ChatMessageResponse(BaseModel):
     metadata: Optional[Dict[str, Any]] = None
     structured_data: Optional[Dict[str, Any]] = None  # Structured JSON data (properties/jobs)
 
+
+# Catalog models
+class CatalogItemCreate(BaseModel):
+    """Create catalog item model."""
+    catalog_item_id: str  # property_id or job_id from agent response
+    catalog_name: str  # 'property', 'job', etc.
+    agent_name: Optional[str] = None
+    source_message_id: Optional[str] = None
+    session_id: Optional[int] = None
+
+
+class CatalogItemResponse(BaseModel):
+    """Catalog item response model."""
+    id: int
+    user_id: int
+    catalog_item_id: str
+    catalog_name: str
+    saved_at: datetime
+    updated_at: datetime
+    agent_name: Optional[str] = None
+    source_message_id: Optional[str] = None
+    session_id: Optional[int] = None
+    item_data: Optional[Dict[str, Any]] = None  # Fetched from BigQuery
+
+    class Config:
+        from_attributes = True
+
+
+class CatalogItemDeleteRequest(BaseModel):
+    """Delete catalog items request model."""
+    item_ids: List[int]  # List of catalog item IDs to delete
+

@@ -16,7 +16,7 @@ from .models import (
 )
 from .auth import get_current_user
 from .config import REMOTE_APP, AGENT_ENGINE_RESOURCE_NAME, PROJECT_ID, LOCATION
-from .utils import extract_json_from_text, extract_text_from_artifacts
+from .utils import parse_session_info_to_messages
 
 router = APIRouter(prefix="/api/sessions", tags=["sessions"])
 
@@ -189,11 +189,11 @@ async def delete_session(
             detail="Session not found"
         )
     
-    agent_session_id = db_session.agent_session_id
     try:
-        session_name = f"{AGENT_ENGINE_RESOURCE_NAME}/sessions/{agent_session_id}"
-        REMOTE_APP.sessions.delete(name=session_name)
-        
+        REMOTE_APP.delete_session(
+            user_id=str(current_user.id),
+            session_id=session_id)
+
     except Exception:
         # Silently fail - Vertex AI session deletion failure shouldn't prevent database cleanup
         pass
@@ -232,210 +232,26 @@ async def get_session_history(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Session not found"
         )
-    
-    # Try to get session info from Vertex AI
-    history = []
+
     user_id = str(current_user.id)
     agent_session_id = db_session.agent_session_id
     
-    try:
-        # Try get_session method first (returns session_info with events)
-        session_info = None
-        if hasattr(REMOTE_APP, 'get_session'):
-            try:
-                session_info = REMOTE_APP.get_session(
-                    user_id=user_id,
-                    session_id=agent_session_id
-                )
-            except Exception:
-                pass
-        
-        # Fallback: Try get_session_state if get_session doesn't exist or failed
-        if not session_info and hasattr(REMOTE_APP, 'get_session_state'):
-            try:
-                session_state = REMOTE_APP.get_session_state(
-                    user_id=user_id,
-                    session_id=agent_session_id
-                )
-                # Check if session_state has events (might be nested)
-                if isinstance(session_state, dict):
-                    if "events" in session_state:
-                        session_info = session_state
-                    elif "session_info" in session_state:
-                        session_info = session_state.get("session_info")
-            except Exception:
-                pass
-        
-        if session_info and isinstance(session_info, dict):
-            # Extract events from session_info
-            events = session_info.get("events", [])
-            
-            if events:
-                # Parse each event in chronological order
-                for event in events:
-                    if not isinstance(event, dict):
-                        continue
-                    
-                    content = event.get("content", {})
-                    if not isinstance(content, dict):
-                        continue
-                    
-                    parts = content.get("parts", [])
-                    role = content.get("role", "")
-                    author = event.get("author", "")
-                    timestamp = event.get("timestamp")
-                    
-                    # Convert timestamp to datetime if available
-                    event_timestamp = None
-                    if timestamp:
-                        try:
-                            event_timestamp = datetime.fromtimestamp(timestamp)
-                        except (ValueError, TypeError, OSError):
-                            pass
-                    
-                    # Process each part in the event
-                    for part in parts:
-                        if not isinstance(part, dict):
-                            continue
-                        
-                        # 1. Extract user messages (text from user role)
-                        if role == "user" and author == "user":
-                            text = part.get("text")
-                            if text and text.strip():
-                                history.append(ChatMessageResponse(
-                                    role="user",
-                                    content=text.strip(),
-                                    timestamp=event_timestamp,
-                                    metadata=None
-                                ))
-                        
-                        # 2. Extract function calls (agent delegations)
-                        function_call = part.get("functionCall")
-                        if function_call and isinstance(function_call, dict):
-                            func_name = function_call.get("name", "")
-                            func_args = function_call.get("args", {})
-                            
-                            # Format function call message (similar to endpoints.py)
-                            if func_name == "send_task":
-                                agent_name = func_args.get("agent_name", "Unknown Agent")
-                                task = func_args.get("task", "")
-                                history.append(ChatMessageResponse(
-                                    role="assistant",
-                                    content=f"🤖 **{agent_name}**\n\n{task}",
-                                    timestamp=event_timestamp,
-                                    metadata={"title": "🔄 Delegating to Agent"}
-                                ))
-                            else:
-                                # Other function calls
-                                func_name_display = func_name.replace("_", " ").title()
-                                history.append(ChatMessageResponse(
-                                    role="assistant",
-                                    content=f"🛠️ Calling {func_name_display}...",
-                                    timestamp=event_timestamp,
-                                    metadata={"title": "🛠️ Tool Call"}
-                                ))
-                        
-                        # 3. Extract artifact results (functionResponse with artifacts)
-                        function_response = part.get("functionResponse")
-                        if function_response and isinstance(function_response, dict):
-                            response_data = function_response.get("response", {})
-                            if isinstance(response_data, dict):
-                                result = response_data.get("result", {})
-                                if isinstance(result, dict):
-                                    # Extract artifacts text (reuse logic from endpoints.py)
-                                    artifacts_text = None
-                                    
-                                    artifacts = result.get("artifacts", [])
-                                    if artifacts:
-                                        for artifact in artifacts:
-                                            if isinstance(artifact, dict):
-                                                artifact_parts = artifact.get("parts", [])
-                                                for artifact_part in artifact_parts:
-                                                    if isinstance(artifact_part, dict):
-                                                        if artifact_part.get("kind") == "text" and artifact_part.get("text"):
-                                                            artifacts_text = artifact_part.get("text")
-                                                            break
-                                                        elif artifact_part.get("text") and "kind" not in artifact_part:
-                                                            artifacts_text = artifact_part.get("text")
-                                                            break
-                                    
-                                    if artifacts_text:
-                                        # Parse JSON from artifacts (reuse extract_json_from_text)
-                                        structured_data = extract_json_from_text(artifacts_text)
-                                        
-                                        # Format content similar to endpoints.py
-                                        if structured_data:
-                                            content_text = json.dumps(structured_data, indent=2)
-                                            metadata = {"title": "Agent Response"}
-                                        else:
-                                            content_text = artifacts_text
-                                            metadata = None
-                                        
-                                        history.append(ChatMessageResponse(
-                                            role="assistant",
-                                            content=content_text,
-                                            timestamp=event_timestamp,
-                                            metadata=metadata,
-                                            structured_data=structured_data  # Include structured_data for frontend
-                                        ))
-                        
-                            # 4. Extract final text responses (model role with text, but not function calls)
-                            # Only if we haven't already captured it as artifact or function call
-                            if role == "model" and author != "user":
-                                text = part.get("text")
-                                # Only add if it's not already captured as artifact or function call
-                                if (text and text.strip() and 
-                                    not part.get("functionCall") and 
-                                    not part.get("functionResponse")):
-                                    # Check if it contains JSON (similar to endpoints.py logic)
-                                    # Check for JSON indicators first
-                                    structured_data = None
-                                    content_stripped = text.strip()
-                                    
-                                    # Similar to endpoints.py: check if content looks like JSON
-                                    if '{' in content_stripped and ('"properties"' in content_stripped or '"jobs"' in content_stripped):
-                                        structured_data = extract_json_from_text(content_stripped)
-                                    
-                                    # Format response similar to endpoints.py
-                                    if structured_data:
-                                        content_text = json.dumps(structured_data, indent=2)
-                                        metadata = {"title": "Agent Response"}
-                                    else:
-                                        content_text = content_stripped
-                                        # Only add metadata for actual agent responses (not short messages)
-                                        if len(content_stripped) > 50 and not content_stripped.startswith("🤖") and not content_stripped.startswith("🛠️"):
-                                            metadata = {"title": "Agent Response"}
-                                        else:
-                                            metadata = None
-                                    
-                                    history.append(ChatMessageResponse(
-                                        role="assistant",
-                                        content=content_text,
-                                        timestamp=event_timestamp,
-                                        metadata=metadata,
-                                        structured_data=structured_data  # Include structured_data for frontend
-                                    ))
-        
-        # If no history found, return empty list
-        if not history:
-            history.append(ChatMessageResponse(
-                role="system",
-                content="No conversation history available for this session.",
-                timestamp=None,
-                metadata=None
-            ))
-    
-    except Exception as e:
-        # Log error but don't fail - return error message
-        history.append(ChatMessageResponse(
-            role="system",
-            content=f"Error retrieving history: {str(e)}",
-            timestamp=None,
-            metadata={"error": str(e)}
-        ))
-    
+    # Try get_session method first (returns session_info with events)
+    session_info = REMOTE_APP.get_session(
+        user_id=user_id,
+        session_id=agent_session_id
+    )
+
+    if not session_info:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Session not found"
+        )
+
+    messages = parse_session_info_to_messages(session_info)
+
     # Return in the same shape as /api/chat (messages + session_id)
     return ChatResponse(
-        messages=[msg.model_dump() if hasattr(msg, "model_dump") else msg for msg in history],
+        messages=messages,
         session_id=agent_session_id
     )

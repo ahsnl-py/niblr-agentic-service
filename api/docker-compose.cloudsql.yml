@@ -11,9 +11,19 @@ services:
       - ~/.config/gcloud/application_default_credentials.json:/credentials.json:ro
     environment:
       - GOOGLE_APPLICATION_CREDENTIALS=/credentials.json
+      # Bypass Docker proxy for direct internet access
+      - NO_PROXY=*
+      - no_proxy=*
+      - HTTP_PROXY=
+      - http_proxy=
+      - HTTPS_PROXY=
+      - https_proxy=
     ports:
       - "5432:5432"
     restart: unless-stopped
+    dns:
+      - 8.8.8.8
+      - 8.8.4.4
 
   api:
     build:
@@ -37,6 +47,13 @@ services:
       # Connect to Cloud SQL via Cloud SQL Proxy
       # Format: postgresql://username:password@cloudsql-proxy:5432/database_name
       - DATABASE_URL=postgresql://${DB_USER:-postgres}:${DB_PASSWORD}@cloudsql-proxy:5432/niblr_api
+      # Bypass Docker proxy for direct internet access
+      - NO_PROXY=*
+      - no_proxy=*
+      - HTTP_PROXY=
+      - http_proxy=
+      - HTTPS_PROXY=
+      - https_proxy=
     volumes:
       - ~/.config/gcloud/application_default_credentials.json:/app/creds/adc.json:ro
     env_file:
@@ -44,6 +61,9 @@ services:
     depends_on:
       - cloudsql-proxy
     restart: unless-stopped
+    dns:
+      - 8.8.8.8
+      - 8.8.4.4
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
       interval: 30s

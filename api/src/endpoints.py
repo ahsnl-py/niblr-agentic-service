@@ -137,6 +137,16 @@ def register_endpoints(app):
             if not request.message.strip():
                 raise HTTPException(status_code=400, detail="Message cannot be empty")
             
+            # Track timing and metadata
+            first_timestamp = None
+            last_timestamp = None
+            collected_metadata = {
+                "usage_metadata": None,
+                "agent_name": None,
+                "author": None,
+                "model_version": None,
+            }
+            
             # Collect all responses
             all_responses = []
             
@@ -149,168 +159,99 @@ def register_endpoints(app):
                 # Convert event to dict if it's not already
                 event_dict = convert_event_to_dict(event)
                 
-                # Check if event has result.artifacts structure (like test_client response)
-                # This is the final result structure with artifacts
+                # Track timestamps for response time calculation
+                event_timestamp = event_dict.get("timestamp")
+                if event_timestamp:
+                    if first_timestamp is None:
+                        first_timestamp = event_timestamp
+                    last_timestamp = event_timestamp
+                
+                # Collect metadata from events
+                if event_dict.get("usage_metadata") and not collected_metadata["usage_metadata"]:
+                    collected_metadata["usage_metadata"] = event_dict.get("usage_metadata")
+                
+                if event_dict.get("author") and not collected_metadata["author"]:
+                    collected_metadata["author"] = event_dict.get("author")
+                
+                if event_dict.get("model_version") and not collected_metadata["model_version"]:
+                    collected_metadata["model_version"] = event_dict.get("model_version")
+                
+                # Extract agent name from artifacts (event-2.json structure)
+                content_parts = event_dict.get("content", {}).get("parts", [])
+                for part in content_parts:
+                    func_response = part.get("function_response", {})
+                    if func_response:
+                        response_obj = func_response.get("response", {})
+                        result = response_obj.get("result", {})
+                        artifacts = result.get("artifacts", [])
+                        for artifact in artifacts:
+                            artifact_name = artifact.get("name")
+                            if artifact_name and not collected_metadata["agent_name"]:
+                                collected_metadata["agent_name"] = artifact_name
+                
+                # Extract content from artifacts (preserve as-is)
                 artifacts_text = extract_text_from_artifacts(event_dict)
                 if artifacts_text:
-                    # Extract structured JSON from artifacts text
+                    # Extract structured JSON if present, but keep original text
                     structured_data = extract_json_from_text(artifacts_text)
                     
-                    content = json.dumps(structured_data, indent=2) if structured_data else artifacts_text
-                    all_responses.append(create_agent_response(
-                        content=content,
-                        structured_data=structured_data
-                    ))
-                
-                # Check if event has state/output_key with structured data
-                # The agent stores structured output in state under output_key
-                event_state = None
-                if isinstance(event_dict, dict):
-                    event_state = event_dict.get("state", {})
-                else:
-                    # Try to get state from original event object
-                    if hasattr(event, 'state'):
-                        state_obj = event.state
-                    if isinstance(state_obj, dict):
-                        event_state = state_obj
-                    elif hasattr(state_obj, '__dict__'):
-                        event_state = state_obj.__dict__
-                    elif hasattr(state_obj, 'model_dump'):
-                        event_state = state_obj.model_dump()
-                
-                if event_state:
-                    # Check for property_listings or job_listings in state
-                    property_listings = event_state.get("property_listings") if isinstance(event_state, dict) else None
-                    job_listings = event_state.get("job_listings") if isinstance(event_state, dict) else None
+                    # Use original artifacts text as content (preserve as-is)
+                    content = artifacts_text
                     
-                    if property_listings or job_listings:
-                        # Found structured data in state - use it instead of text
-                        structured_data = property_listings if property_listings else job_listings
-                        # Convert to dict if it's a string
-                        if isinstance(structured_data, str):
-                            try:
-                                structured_data = json.loads(structured_data)
-                            except json.JSONDecodeError:
-                                pass
-                        
-                        if isinstance(structured_data, dict):
-                            # Add structured response - this is the actual JSON from the agent
-                            all_responses.append(create_agent_response(
-                                content=json.dumps(structured_data, indent=2),
-                                structured_data=structured_data
-                            ))
-                
-                # Process each event - make sure we capture all responses
-                # Process content.parts for intermediate messages (like delegation messages)
-                event_responses = process_agent_response(event_dict)
-                if event_responses:
-                    # Filter out duplicate text responses if we already have artifacts
-                    if artifacts_text:
-                        # Keep only non-text responses (like delegation messages with metadata)
-                        # and responses that don't match the artifacts text
-                        filtered_responses = []
-                        for r in event_responses:
-                            content = r.get("content", "").strip()
-                            # Keep if it has metadata (delegation/tool call messages)
-                            if r.get("metadata") is not None:
-                                filtered_responses.append(r)
-                            # Keep if it's different from artifacts_text (to avoid duplicates)
-                            elif content and content != artifacts_text.strip():
-                                # Also check if it's not the same JSON
-                                try:
-                                    if json.loads(content) != extract_json_from_text(artifacts_text):
-                                        filtered_responses.append(r)
-                                except (json.JSONDecodeError, ValueError):
-                                    # Not JSON, so keep if different text
-                                    filtered_responses.append(r)
-                        
-                        if filtered_responses:
-                            all_responses.extend(filtered_responses)
-                    else:
-                        all_responses.extend(event_responses)
-            
-            # After streaming completes, try to get state from the session
-            # The agent stores structured output in state under output_key
-            try:
-                # Try to get session state if available
-                if hasattr(REMOTE_APP, 'get_session_state'):
-                    session_state = REMOTE_APP.get_session_state(user_id=user_id, session_id=session_id)
-                    if session_state:
-                        property_listings = session_state.get("property_listings")
-                        job_listings = session_state.get("job_listings")
-                        
-                        if property_listings or job_listings:
-                            structured_data = property_listings if property_listings else job_listings
-                            if isinstance(structured_data, str):
-                                try:
-                                    structured_data = json.loads(structured_data)
-                                except json.JSONDecodeError:
-                                    pass
-                            
-                            if isinstance(structured_data, dict):
-                                # Replace or add structured response
-                                # Remove any existing markdown responses and add JSON
-                                all_responses = [
-                                    r for r in all_responses 
-                                    if r.get("metadata") is not None or not r.get("content", "").startswith("Here are")
-                                ]
-                                all_responses.append(create_agent_response(
-                                    content=json.dumps(structured_data, indent=2),
-                                    structured_data=structured_data
-                                ))
-            except Exception:
-                # If we can't access session state, continue with what we have
-                pass
-            
-            # Filter and prioritize responses
-            # Remove short intermediate messages and prioritize structured data
-            filtered_responses = []
-            has_structured_response = False
-            
-            for response in all_responses:
-                content = response.get("content", "")
-                metadata = response.get("metadata")
-                
-                # Always keep delegation messages and tool calls (they have metadata)
-                if metadata is not None:
-                    filtered_responses.append(response)
-                # Always keep responses with structured_data (final JSON response - works for both properties and jobs)
-                elif response.get("structured_data"):
-                    filtered_responses.append(response)
-                    has_structured_response = True
-                # Check if content contains JSON indicators - re-extract if needed
-                # This handles both property listings ("properties") and job listings ("jobs")
-                elif '{' in content and ('"properties"' in content or '"jobs"' in content):
-                    # This looks like a JSON response, make sure we extract it
-                    structured_data = extract_json_from_text(content)
+                    response = {
+                        "role": "assistant",
+                        "content": content,
+                    }
+                    
                     if structured_data:
                         response["structured_data"] = structured_data
-                        # Ensure metadata is set for agent responses
-                        if not response.get("metadata"):
-                            response["metadata"] = {"title": "Agent Response"}
-                        filtered_responses.append(response)
-                        has_structured_response = True
-                    else:
-                        # Even if extraction failed, keep it if it looks like JSON
-                        # This ensures we don't lose job listings or property listings
-                        filtered_responses.append(response)
-                # Keep longer text responses that might be final responses
-                elif len(content.strip()) > 50:
-                    filtered_responses.append(response)
-                # If we don't have structured data yet, keep shorter responses too (they might contain JSON)
-                elif not has_structured_response and len(content.strip()) > 10:
-                    filtered_responses.append(response)
+                    
+                    all_responses.append(response)
+                
+                # Extract content from text parts (event-3.json structure)
+                for part in content_parts:
+                    if part.get("text"):
+                        text_content = part.get("text", "").strip()
+                        if text_content:
+                            # Extract structured JSON if present
+                            structured_data = extract_json_from_text(text_content)
+                            
+                            # Use original text as content (preserve as-is)
+                            content = text_content
+                            
+                            response = {
+                                "role": "assistant",
+                                "content": content,
+                            }
+                            
+                            if structured_data:
+                                response["structured_data"] = structured_data
+                            
+                            all_responses.append(response)
             
-            # Use filtered responses if we filtered any out
-            if filtered_responses:
-                all_responses = filtered_responses
+            # Calculate response time if we have timestamps
+            if first_timestamp and last_timestamp:
+                response_time = last_timestamp - first_timestamp
+                collected_metadata["response_time_seconds"] = round(response_time, 3)
             
             # If no responses, return default
             if not all_responses:
-                all_responses = [create_agent_response(
-                    content="No response from agent",
-                    metadata=None
-                )]
+                all_responses = [{
+                    "role": "assistant",
+                    "content": "No response from agent",
+                }]
+            
+            # Clean up metadata - only include non-None values
+            clean_metadata = {k: v for k, v in collected_metadata.items() if v is not None}
+            
+            # Add metadata to all responses if we collected any
+            if clean_metadata:
+                for response in all_responses:
+                    if response.get("metadata"):
+                        # Merge with existing metadata
+                        response["metadata"].update(clean_metadata)
+                    else:
+                        response["metadata"] = clean_metadata.copy()
             
             # Return the Vertex AI agent_session_id so user can resume chat history
             return ChatResponse(
